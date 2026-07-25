@@ -18,7 +18,7 @@ export async function initializeExtensionPanel() {
     }
 
     try {
-      let settingsHtml = await context.renderExtensionTemplateAsync('third-party/ST-traslate-data', 'settings');
+      let settingsHtml = await context.renderExtensionTemplateAsync('third-party/ST-translate-data', 'settings');
       if (!settingsHtml) {
         const currentScript = document.currentScript || document.querySelector('script[src*="script.js"]');
         const baseUrl = currentScript?.src ? currentScript.src.replace(/\/[^/]*$/, '/') : null;

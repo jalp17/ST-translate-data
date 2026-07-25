@@ -33,7 +33,7 @@ Extensión para SillyTavern que traduce contenido de lorebooks y tarjetas de per
 3. Asegúrate de que `manifest.json` y `dist/script.js` estén presentes en el mismo directorio.
 4. Abre `settings.html` dentro de SillyTavern o en el contexto de la extensión.
 
-Repositorio del proyecto: https://github.com/jalp17/ST-traslate-data
+Repositorio del proyecto: https://github.com/jalp17/ST-translate-data
 4. Selecciona el idioma origen y destino.
 5. Elige el proveedor de traducción y configura `API URL` / `API key` según el proveedor.
 6. Para un solo PNG, sube el archivo y pulsa `Traducir tarjeta PNG`.

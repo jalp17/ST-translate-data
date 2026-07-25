@@ -26,7 +26,8 @@ export async function initializeTranslator() {
 }
 
 export async function onActivate() {
-  await ui.initializeExtensionPanel();
+  await initializeTranslator();
+  await initializeExtensionPanel();
 }
 
 export function initializeExtensionPanel() {

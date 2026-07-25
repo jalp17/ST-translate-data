@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/loader.js --bundle --outfile=dist/script.js --platform=browser --format=iife --minify --sourcemap",
-    "watch": "esbuild src/loader.js --bundle --outfile=dist/script.js --platform=browser --format=iife --minify --sourcemap --watch"
+    "build": "esbuild src/loader.js --bundle --outfile=dist/script.js --platform=browser --format=esm --minify --sourcemap",
+    "watch": "esbuild src/loader.js --bundle --outfile=dist/script.js --platform=browser --format=esm --minify --sourcemap --watch"
   },
   "devDependencies": {
     "esbuild": "^0.19.4"

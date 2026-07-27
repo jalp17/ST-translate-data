@@ -110,7 +110,7 @@ export function attachTranslatorSettingsEvents() {
   const refreshLorebookListButton = document.getElementById('refreshLorebookListButton');
   const lorebookStatusText = document.getElementById('lorebookStatusText');
 
-  if (!pngInput || !translatePngButton || !translateImageBatchButton || !translateLorebookButton || !translateSelectedCharactersButton || !refreshCharacterListButton || !characterBatchSelect || !sourceLangSelect || !targetLangSelect || !providerSelect || !modelInput || !modelSelect || !apiUrlInput || !apiKeyInput || !apiKeyLoadButton || !refreshProfilesButton || !connectionModeSelect || !useProfileProviderCheckbox || !apiKeyProfileSelect || !statusDetailsText || !progressBar || !statusText || !batchDelayInput || !lorebookSelect || !refreshLorebookListButton) {
+  if (!pngInput || !translatePngButton || !translateImageBatchButton || !translateLorebookButton || !translateSelectedCharactersButton || !refreshCharacterListButton || !characterBatchSelect || !sourceLangSelect || !targetLangSelect || !providerSelect || !modelInput || !apiUrlInput || !apiKeyInput || !apiKeyLoadButton || !refreshProfilesButton || !connectionModeSelect || !useProfileProviderCheckbox || !apiKeyProfileSelect || !statusDetailsText || !progressBar || !statusText || !batchDelayInput || !lorebookSelect || !refreshLorebookListButton) {
     return;
   }
 
@@ -671,12 +671,14 @@ export function attachTranslatorSettingsEvents() {
     }
   });
   useProfileProviderCheckbox.addEventListener('change', applyProfileSelection);
-  modelSelect.addEventListener('change', () => {
-    if (modelSelect.value) {
-      modelInput.value = modelSelect.value;
-    }
-    updateStatusDetails();
-  });
+  if (modelSelect) {
+    modelSelect.addEventListener('change', () => {
+      if (modelSelect.value) {
+        modelInput.value = modelSelect.value;
+      }
+      updateStatusDetails();
+    });
+  }
   apiKeyLoadButton.addEventListener('click', () => {
     const profileIndex = apiKeyProfileSelect.value;
     if (!profileIndex) {
@@ -709,6 +711,48 @@ export function attachTranslatorSettingsEvents() {
       statusText.textContent = 'Error al refrescar perfiles.';
     }
   });
+
+  const importStGlobalConfigButton = document.getElementById('importStGlobalConfigButton');
+  const refreshGlobalStatusButton = document.getElementById('refreshGlobalStatusButton');
+
+  if (importStGlobalConfigButton) {
+    importStGlobalConfigButton.addEventListener('click', () => {
+      const inferred = getInferredSTProfile();
+      if (!inferred) {
+        statusText.textContent = 'No se pudo detectar la configuración ST global.';
+        return;
+      }
+
+      if (inferred.provider && Array.from(providerSelect.options).some((option) => option.value === inferred.provider)) {
+        providerSelect.value = inferred.provider;
+      }
+      if (inferred.apiUrl) {
+        apiUrlInput.value = inferred.apiUrl;
+      }
+      if (inferred.model) {
+        modelInput.value = inferred.model;
+      }
+      if (inferred.apiKey) {
+        apiKeyInput.value = inferred.apiKey;
+      }
+
+      connectionModeSelect.value = 'st_global';
+      updateModelSuggestionList(providerSelect.value);
+      updateProviderStatusMessage();
+      updateApiKeyStatus();
+      updateConnectionModeUI();
+      updateStatusDetails();
+      statusText.textContent = 'Configuración ST global importada.';
+    });
+  }
+
+  if (refreshGlobalStatusButton) {
+    refreshGlobalStatusButton.addEventListener('click', () => {
+      updateStatusDetails();
+      updateApiKeyStatus();
+      statusText.textContent = 'Estado global actualizado.';
+    });
+  }
 
   let lastProviderSelection = providerSelect.value;
 

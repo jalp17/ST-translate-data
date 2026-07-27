@@ -127,6 +127,14 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 0.75rem;
+    margin-top: 1rem;
+  }
+
+  .translator-panel .global-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.75rem;
   }
 
   .translator-panel .character-row {
@@ -241,6 +249,7 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(220px, 1fr));
     gap: 0.9rem;
+    margin-top: 0.9rem;
   }
 
   .translator-panel .status-item {
@@ -346,7 +355,7 @@
           </div>
         </div>
 
-        <div class="status-grid" style="margin-top: 0.9rem;">
+        <div class="status-grid">
           <div class="status-item">
             <span class="status-label">Estado</span>
             <span id="statusDetailsText" class="status-value">Configuración manual</span>
@@ -403,6 +412,14 @@
         <div class="hint-text">
           El modo de perfil guardado reutiliza las conexiones existentes de SillyTavern. El modo global detecta la configuración activa automáticamente.
         </div>
+        <div class="global-actions">
+          <button id="importStGlobalConfigButton" type="button" class="menu_button">
+            <i class="fa-solid fa-file-import"></i> Importar configuración ST global
+          </button>
+          <button id="refreshGlobalStatusButton" type="button" class="menu_button">
+            <i class="fa-solid fa-rotate"></i> Refrescar estado global
+          </button>
+        </div>
       </div>
 
       <div class="section-card">
@@ -433,6 +450,14 @@
             <input id="outputFolder" class="text_pole" type="text" placeholder="ruta/de/salida/o/nombre-de-carpeta" />
           </div>
         </div>
+        <div class="button-row">
+          <button id="translatePngButton" type="button" class="menu_button primary">
+            <i class="fa-solid fa-image"></i> Traducir tarjeta PNG
+          </button>
+          <button id="translateImageBatchButton" type="button" class="menu_button primary">
+            <i class="fa-solid fa-images"></i> Traducir lote de imágenes
+          </button>
+        </div>
       </div>
 
       <div class="section-card">
@@ -461,7 +486,7 @@
             </button>
           </div>
         </div>
-        <div class="button-row" style="margin-top: 1rem;">
+        <div class="button-row">
           <button id="translateSelectedCharactersButton" type="button" class="menu_button primary">
             <i class="fa-solid fa-language"></i> Traducir personajes seleccionados
           </button>
@@ -484,20 +509,11 @@
             <div id="lorebookStatusText" class="hint-text">Se traducirán las entradas del lorebook seleccionado.</div>
           </div>
         </div>
-        <div class="button-row" style="margin-top: 1rem;">
+        <div class="button-row">
           <button id="translateLorebookButton" type="button" class="menu_button primary">
             <i class="fa-solid fa-language"></i> Traducir lorebook seleccionado
           </button>
         </div>
-      </div>
-
-      <div class="button-row">
-        <button id="translatePngButton" type="button" class="menu_button primary">
-          <i class="fa-solid fa-image"></i> Traducir tarjeta PNG
-        </button>
-        <button id="translateImageBatchButton" type="button" class="menu_button primary">
-          <i class="fa-solid fa-images"></i> Traducir lote de imágenes
-        </button>
       </div>
 
       <div class="progress">

@@ -1,5 +1,5 @@
 import { initializeTranslator, initializeExtensionPanel, onActivate } from './index.js';
 
-export { onActivate };
+onActivate();
 
 window.STUniversalTranslatorModule = { initializeTranslator, initializeExtensionPanel, onActivate };

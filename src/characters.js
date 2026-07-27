@@ -192,6 +192,44 @@ export function getAvailableCharacters() {
   }));
 }
 
+export function searchCharacters(query) {
+  const all = getAvailableCharacters();
+  if (!query || typeof query !== 'string') {
+    return all;
+  }
+  const term = query.toLowerCase().trim();
+  return all.filter((item) => item.name.toLowerCase().includes(term));
+}
+
+export function getAvailableLorebooks() {
+  const candidates = [
+    window.getCurrentLorebook?.(),
+    window.SillyTavern?.getCurrentLorebook?.(),
+    window.SillyTavern?.getContext?.()?.lorebook,
+    window.SillyTavern?.lorebook,
+    window.ST?.lorebook,
+    window.lorebook,
+    window.worldInfo,
+    window.SillyTavern?.worldInfo,
+  ];
+
+  const found = [];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    if (Array.isArray(candidate)) {
+      found.push(...candidate);
+    } else if (typeof candidate === 'object') {
+      found.push(candidate);
+    }
+  }
+
+  return found.map((item, index) => ({
+    id: item?.id ?? item?.uuid ?? `lorebook-${index}`,
+    name: item?.name ?? item?.title ?? `Lorebook ${index + 1}`,
+    data: item,
+  }));
+}
+
 export async function translateLorebook(lorebook, sourceLang = 'auto', targetLang = 'es', batchDelay = 500, providerConfig = { provider: 'openai' }) {
   if (!lorebook?.world_info?.entries) {
     return lorebook;

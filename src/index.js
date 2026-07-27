@@ -11,6 +11,8 @@ export async function initializeTranslator() {
     translateCharacters: characters.translateCharacters,
     translateImageBatch: png.translateImageBatch,
     getAvailableCharacters: characters.getAvailableCharacters,
+    searchCharacters: characters.searchCharacters,
+    getAvailableLorebooks: characters.getAvailableLorebooks,
     translateLorebook: characters.translateLorebook,
     translateText: providers.translateText,
     preserveVariables: utils.preserveVariables,

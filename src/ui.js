@@ -73,12 +73,19 @@ export function attachTranslatorSettingsEvents() {
   }
 
   const pngInput = document.getElementById('pngInput');
+  const pngDropZone = document.getElementById('pngDropZone');
+  const selectedFileName = document.getElementById('selectedFileName');
   const translatePngButton = document.getElementById('translatePngButton');
   const translateImageBatchButton = document.getElementById('translateImageBatchButton');
   const translateLorebookButton = document.getElementById('translateLorebookButton');
   const translateSelectedCharactersButton = document.getElementById('translateSelectedCharactersButton');
   const refreshCharacterListButton = document.getElementById('refreshCharacterListButton');
+  const selectAllCharactersButton = document.getElementById('selectAllCharactersButton');
+  const clearCharacterSelectionButton = document.getElementById('clearCharacterSelectionButton');
+  const characterSearch = document.getElementById('characterSearch');
   const pngBatchInput = document.getElementById('pngBatchInput');
+  const pngBatchDropZone = document.getElementById('pngBatchDropZone');
+  const selectedBatchCount = document.getElementById('selectedBatchCount');
   const outputFolderInput = document.getElementById('outputFolder');
   const characterBatchSelect = document.getElementById('characterBatchSelect');
   const sourceLangSelect = document.getElementById('sourceLang');
@@ -94,11 +101,16 @@ export function attachTranslatorSettingsEvents() {
   const useProfileProviderCheckbox = document.getElementById('useProfileProvider');
   const apiKeyProfileSelect = document.getElementById('apiKeyProfileSelect');
   const statusDetailsText = document.getElementById('statusDetailsText');
+  const apiKeyStatusText = document.getElementById('apiKeyStatusText');
+  const providerStatusText = document.getElementById('providerStatusText');
   const progressBar = document.getElementById('translationProgress');
   const statusText = document.getElementById('statusText');
   const batchDelayInput = document.getElementById('batchDelay');
+  const lorebookSelect = document.getElementById('lorebookSelect');
+  const refreshLorebookListButton = document.getElementById('refreshLorebookListButton');
+  const lorebookStatusText = document.getElementById('lorebookStatusText');
 
-  if (!pngInput || !translatePngButton || !translateImageBatchButton || !translateLorebookButton || !translateSelectedCharactersButton || !refreshCharacterListButton || !characterBatchSelect || !sourceLangSelect || !targetLangSelect || !providerSelect || !modelInput || !modelSelect || !apiUrlInput || !apiKeyInput || !apiKeyLoadButton || !refreshProfilesButton || !connectionModeSelect || !useProfileProviderCheckbox || !apiKeyProfileSelect || !statusDetailsText || !progressBar || !statusText || !batchDelayInput) {
+  if (!pngInput || !translatePngButton || !translateImageBatchButton || !translateLorebookButton || !translateSelectedCharactersButton || !refreshCharacterListButton || !characterBatchSelect || !sourceLangSelect || !targetLangSelect || !providerSelect || !modelInput || !modelSelect || !apiUrlInput || !apiKeyInput || !apiKeyLoadButton || !refreshProfilesButton || !connectionModeSelect || !useProfileProviderCheckbox || !apiKeyProfileSelect || !statusDetailsText || !progressBar || !statusText || !batchDelayInput || !lorebookSelect || !refreshLorebookListButton) {
     return;
   }
 
@@ -432,6 +444,77 @@ export function attachTranslatorSettingsEvents() {
     statusDetailsText.textContent = `${sourceText}Proveedor usado: ${providerSource}. API key: ${keySource}. Endpoint: ${endpoint}.`;
   }
 
+  function updateApiKeyStatus() {
+    const key = apiKeyInput.value.trim();
+    apiKeyStatusText.textContent = key ? 'Configurada' : 'No configurada';
+  }
+
+  async function updateLorebookList() {
+    lorebookSelect.innerHTML = '';
+    const lorebooks = window.STUniversalTranslator?.getAvailableLorebooks?.() || [];
+    if (!lorebooks.length) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'No se encontraron lorebooks';
+      option.disabled = true;
+      lorebookSelect.appendChild(option);
+      lorebookStatusText.textContent = 'No hay lorebooks disponibles en el entorno.';
+      return;
+    }
+
+    lorebooks.forEach((item) => {
+      const option = document.createElement('option');
+      option.value = item.id;
+      option.textContent = item.name;
+      lorebookSelect.appendChild(option);
+    });
+
+    lorebookStatusText.textContent = `${lorebooks.length} lorebook(s) disponible(s). Se traducirán las entradas del seleccionado.`;
+  }
+
+  function filterCharacters(query) {
+    const term = (query || '').toLowerCase().trim();
+    const options = Array.from(characterBatchSelect.options);
+    options.forEach((option) => {
+      const text = option.textContent.toLowerCase();
+      option.style.display = text.includes(term) ? '' : 'none';
+    });
+  }
+
+  function setupDragAndDrop(dropZone, input, onFiles) {
+    if (!dropZone || !input) return;
+
+    const handleFiles = (files) => {
+      if (!files?.length) return;
+      input.files = files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    dropZone.addEventListener('click', () => input.click());
+
+    dropZone.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (event) => {
+      event.preventDefault();
+      dropZone.classList.remove('drag-over');
+      const files = Array.from(event.dataTransfer?.files || []);
+      handleFiles(files);
+    });
+
+    if (onFiles) {
+      input.addEventListener('change', () => {
+        onFiles(Array.from(input.files || []));
+      });
+    }
+  }
+
   async function findSavedApiKeyProfiles() {
     console.log('ST Translator: finding saved API key profiles');
     const candidates = [];
@@ -734,10 +817,18 @@ export function attachTranslatorSettingsEvents() {
 
   translateLorebookButton.addEventListener('click', async () => {
     updateProgress(5, 'Iniciando traducción de lorebook...');
-    const currentLorebook = window.getCurrentLorebook?.() || window.SillyTavern?.getCurrentLorebook?.();
+    const selectedLorebookId = lorebookSelect.value;
+    if (!selectedLorebookId) {
+      statusText.textContent = 'Seleccione un lorebook de la lista.';
+      updateProgress(0);
+      return;
+    }
 
-    if (!currentLorebook) {
-      statusText.textContent = 'No se encontró el lorebook actual en el entorno.';
+    const lorebooks = window.STUniversalTranslator?.getAvailableLorebooks?.() || [];
+    const selectedLorebook = lorebooks.find((item) => item.id === selectedLorebookId)?.data;
+
+    if (!selectedLorebook) {
+      statusText.textContent = 'No se encontró el lorebook seleccionado.';
       updateProgress(0);
       return;
     }
@@ -747,7 +838,7 @@ export function attachTranslatorSettingsEvents() {
       console.log('ST Translator: starting lorebook translation', providerConfig);
       console.log('Iniciando traducción de lorebook con configuración:', providerConfig);
       const translatedLorebook = await window.STUniversalTranslator.translateLorebook(
-        currentLorebook,
+        selectedLorebook,
         sourceLangSelect.value,
         targetLangSelect.value,
         Number(batchDelayInput.value || 500),
@@ -809,9 +900,65 @@ export function attachTranslatorSettingsEvents() {
     }
   });
 
+  setupDragAndDrop(pngDropZone, pngInput, (files) => {
+    const file = files[0];
+    if (file) {
+      selectedFileName.textContent = `Archivo: ${file.name}`;
+      statusText.textContent = `PNG seleccionado: ${file.name}`;
+    }
+  });
+
+  setupDragAndDrop(pngBatchDropZone, pngBatchInput, (files) => {
+    selectedBatchCount.textContent = `${files.length} archivo(s) seleccionado(s)`;
+    statusText.textContent = files.length ? `Lote: ${files.length} imágenes` : 'Listo';
+  });
+
+  if (characterSearch) {
+    characterSearch.addEventListener('input', () => filterCharacters(characterSearch.value));
+  }
+
+  if (selectAllCharactersButton) {
+    selectAllCharactersButton.addEventListener('click', () => {
+      Array.from(characterBatchSelect.options).forEach((option) => {
+        option.selected = true;
+      });
+      statusText.textContent = 'Todos los personajes seleccionados.';
+    });
+  }
+
+  if (clearCharacterSelectionButton) {
+    clearCharacterSelectionButton.addEventListener('click', () => {
+      Array.from(characterBatchSelect.options).forEach((option) => {
+        option.selected = false;
+      });
+      statusText.textContent = 'Selección limpiada.';
+    });
+  }
+
+  if (refreshLorebookListButton) {
+    refreshLorebookListButton.addEventListener('click', async () => {
+      statusText.textContent = 'Refrescando lorebooks...';
+      try {
+        await updateLorebookList();
+        statusText.textContent = 'Lorebooks refrescados.';
+      } catch (error) {
+        console.error('Error refrescando lorebooks:', error);
+        statusText.textContent = 'Error al refrescar lorebooks.';
+      }
+    });
+  }
+
+  if (apiKeyInput) {
+    apiKeyInput.addEventListener('input', updateApiKeyStatus);
+  }
+
   if (typeof window.STUniversalTranslator?.getAvailableCharacters === 'function') {
     refreshCharacterList();
   } else {
     statusText.textContent = 'Listo';
+  }
+
+  if (typeof window.STUniversalTranslator?.getAvailableLorebooks === 'function') {
+    updateLorebookList();
   }
 }

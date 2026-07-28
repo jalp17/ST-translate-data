@@ -48,6 +48,15 @@ export async function initializeExtensionPanel() {
         while (wrapper.firstChild) {
           target.appendChild(wrapper.firstChild);
         }
+        if (!document.querySelector('link[href*="main.css"]')) {
+          const currentScript = document.currentScript || document.querySelector('script[src*="script.js"]');
+          const baseUrl = currentScript?.src ? currentScript.src.replace(/\/[^/]*$/, '/') : '';
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = new URL('src/styles/main.css', baseUrl).href;
+          link.dataset.extName = 'ST-translate-data';
+          (document.head || document.documentElement).appendChild(link);
+        }
         attachTranslatorSettingsEvents();
       }
     } catch (error) {

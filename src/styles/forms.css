@@ -1,0 +1,421 @@
+/* ============================================================================
+ * ST-TRANSLATE-DATA — FORM STYLES
+ * Inputs, selects, textareas, sliders, search boxes
+ * ============================================================================ */
+
+.sttd-settings label:not(.sttd-checkbox-label) {
+  display: block;
+  margin-top: 16px;
+  margin-bottom: 8px;
+  color: var(--SmartThemeEmColor, #e6e6e6);
+  font-weight: 500;
+  font-size: 0.95em;
+}
+
+.sttd-settings label:not(.sttd-checkbox-label):first-child {
+  margin-top: 0;
+}
+
+/* ============================================================================
+ * BASE INPUT / SELECT / TEXTAREA
+ * ============================================================================ */
+
+.sttd-settings .sttd-input,
+.sttd-settings .sttd-select,
+.sttd-settings .sttd-textarea,
+.sttd-settings input[type="number"],
+.sttd-settings input[type="text"],
+.sttd-settings input[type="password"],
+.sttd-settings input[type="email"],
+.sttd-settings input[type="url"] {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sttd-input,
+.sttd-select,
+.sttd-textarea {
+  padding: 12px 16px;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--sttd-primary) 10%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95))) 0%,
+    color-mix(in srgb, var(--sttd-primary) 5%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95))) 100%);
+  border: 2px solid color-mix(in srgb, var(--sttd-primary) 25%, var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08)));
+  color: var(--SmartThemeBodyColor, #e6e6e6);
+  font-size: 1em;
+  font-weight: 600;
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.2),
+    inset 0 1px 2px rgba(255, 255, 255, 0.05);
+  margin-bottom: 16px;
+}
+
+.sttd-input:hover,
+.sttd-select:hover,
+.sttd-textarea:hover {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--sttd-primary) 15%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95))) 0%,
+    color-mix(in srgb, var(--sttd-primary) 8%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95))) 100%);
+  border-color: color-mix(in srgb, var(--sttd-primary) 40%, var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08)));
+  box-shadow:
+    0 4px 12px color-mix(in srgb, var(--sttd-primary) 12%, transparent),
+    inset 0 1px 2px rgba(255, 255, 255, 0.08);
+}
+
+.sttd-input:focus,
+.sttd-select:focus,
+.sttd-textarea:focus {
+  outline: none;
+  border-color: var(--sttd-primary);
+  box-shadow:
+    0 4px 16px color-mix(in srgb, var(--sttd-primary) 20%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--sttd-primary) 15%, transparent);
+}
+
+.sttd-input::placeholder,
+.sttd-textarea::placeholder {
+  color: color-mix(in srgb, var(--SmartThemeBodyColor, #e6e6e6) 50%, transparent);
+  font-weight: 400;
+}
+
+/* Small/compact input variant */
+.sttd-input-sm {
+  padding: 8px 12px;
+  font-size: 0.9em;
+  font-weight: 500;
+  margin-bottom: 0;
+}
+
+/* Number input - compact for inline use */
+.sttd-input-number {
+  width: auto;
+  min-width: 70px;
+  padding: 8px 12px;
+  background: var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95));
+  border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  color: var(--SmartThemeBodyColor, #e6e6e6);
+  font-size: 0.9em;
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: 0;
+  transition: all 0.2s ease;
+}
+
+.sttd-input-number:hover {
+  border-color: color-mix(in srgb, var(--sttd-primary) 50%, var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08)));
+}
+
+.sttd-input-number:focus {
+  outline: none;
+  border-color: var(--sttd-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sttd-primary) 15%, transparent);
+}
+
+/* ============================================================================
+ * CUSTOM SELECT DROPDOWN
+ * ============================================================================ */
+
+.sttd-select {
+  width: 100%;
+  padding: 12px 16px;
+  padding-right: 40px;
+  border: 2px solid color-mix(in srgb, var(--sttd-primary) 25%, var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08)));
+  border-radius: 10px;
+  color: var(--SmartThemeBodyColor, #e6e6e6);
+  font-size: 1em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.2),
+    inset 0 1px 2px rgba(255, 255, 255, 0.05);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='10' viewBox='0 0 14 10'%3E%3Cpath fill='%23A0A0A0' d='M7 10L0 0h14z'/%3E%3C/svg%3E") no-repeat calc(100% - 14px) center / 14px 10px,
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--sttd-primary) 10%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95))) 0%,
+      color-mix(in srgb, var(--sttd-primary) 5%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95))) 100%);
+  margin-bottom: 16px;
+}
+
+.sttd-select:hover {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='10' viewBox='0 0 14 10'%3E%3Cpath fill='%23A0A0A0' d='M7 10L0 0h14z'/%3E%3C/svg%3E") no-repeat calc(100% - 14px) center / 14px 10px,
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--sttd-primary) 15%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95))) 0%,
+      color-mix(in srgb, var(--sttd-primary) 8%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95))) 100%);
+  border-color: color-mix(in srgb, var(--sttd-primary) 40%, var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08)));
+  box-shadow:
+    0 4px 12px color-mix(in srgb, var(--sttd-primary) 12%, transparent),
+    inset 0 1px 2px rgba(255, 255, 255, 0.08);
+}
+
+.sttd-select:focus {
+  outline: none;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='10' viewBox='0 0 14 10'%3E%3Cpath fill='%23A0A0A0' d='M7 10L0 0h14z'/%3E%3C/svg%3E") no-repeat calc(100% - 14px) center / 14px 10px,
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--sttd-primary) 10%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95))) 0%,
+      color-mix(in srgb, var(--sttd-primary) 5%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95))) 100%);
+  border-color: var(--sttd-primary);
+  box-shadow:
+    0 4px 16px color-mix(in srgb, var(--sttd-primary) 20%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--sttd-primary) 15%, transparent);
+}
+
+.sttd-select option {
+  background: var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95));
+  color: var(--SmartThemeBodyColor, #e6e6e6);
+  padding: 10px;
+}
+
+/* ============================================================================
+ * TEXTAREA
+ * ============================================================================ */
+
+.sttd-textarea {
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* ============================================================================
+ * RANGE SLIDER
+ * ============================================================================ */
+
+.sttd-slider {
+  width: 100%;
+  height: 8px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--sttd-primary) 20%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95))) 0%,
+    color-mix(in srgb, var(--sttd-primary) 40%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95))) 100%);
+  border-radius: 6px;
+  outline: none;
+  margin: 12px 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.2),
+    0 1px 2px color-mix(in srgb, var(--sttd-primary) 10%, transparent);
+}
+
+.sttd-slider:hover {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--sttd-primary) 30%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95))) 0%,
+    color-mix(in srgb, var(--sttd-primary) 50%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95))) 100%);
+}
+
+/* Webkit/Blink (Chrome, Safari, Edge) */
+.sttd-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  background: linear-gradient(135deg,
+    var(--sttd-primary-bright) 0%,
+    var(--sttd-primary) 100%);
+  border: 2px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.3),
+    0 0 0 0 color-mix(in srgb, var(--sttd-primary) 40%, transparent);
+}
+
+.sttd-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.4),
+    0 0 0 4px color-mix(in srgb, var(--sttd-primary) 25%, transparent);
+}
+
+.sttd-slider::-webkit-slider-thumb:active {
+  transform: scale(1.05);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.3),
+    0 0 0 6px color-mix(in srgb, var(--sttd-primary) 20%, transparent);
+}
+
+/* Firefox */
+.sttd-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  background: linear-gradient(135deg,
+    var(--sttd-primary-bright) 0%,
+    var(--sttd-primary) 100%);
+  border: 2px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.3),
+    0 0 0 0 color-mix(in srgb, var(--sttd-primary) 40%, transparent);
+}
+
+.sttd-slider::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.4),
+    0 0 0 4px color-mix(in srgb, var(--sttd-primary) 25%, transparent);
+}
+
+.sttd-slider::-moz-range-thumb:active {
+  transform: scale(1.05);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.3),
+    0 0 0 6px color-mix(in srgb, var(--sttd-primary) 20%, transparent);
+}
+
+/* Firefox track */
+.sttd-slider::-moz-range-track {
+  height: 8px;
+  background: transparent;
+  border-radius: 6px;
+}
+
+/* ============================================================================
+ * HINT / HELP TEXT
+ * ============================================================================ */
+
+.sttd-hint {
+  display: block;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--sttd-primary) 5%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95)));
+  border-left: 3px solid color-mix(in srgb, var(--sttd-primary) 30%, transparent);
+  border-radius: 6px;
+  color: color-mix(in srgb, var(--SmartThemeBodyColor, #e6e6e6) 85%, transparent);
+  font-size: 0.88em;
+  line-height: 1.5;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================================================
+ * SEARCH BOX (icon inside input)
+ * ============================================================================ */
+
+.sttd-search-box {
+  position: relative;
+}
+
+.sttd-search-box .sttd-input,
+.sttd-search-box .sttd-select {
+  padding-left: 40px;
+}
+
+.sttd-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--SmartThemeQuoteColor, #888);
+  font-size: 14px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ============================================================================
+ * INPUT WITH BUTTON (grid layout)
+ * ============================================================================ */
+
+.sttd-input-with-button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.sttd-input-with-button .sttd-btn {
+  width: auto;
+  white-space: nowrap;
+}
+
+/* ============================================================================
+ * FORM GRID (replaces .form-grid)
+ * ============================================================================ */
+
+.sttd-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.sttd-form-grid.three-cols {
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+}
+
+.sttd-form-grid.full-width {
+  grid-template-columns: 1fr;
+}
+
+.sttd-full-width {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 768px) {
+  .sttd-form-grid,
+  .sttd-form-grid.three-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================================
+ * CHECKBOX LABEL (card-style)
+ * ============================================================================ */
+
+.sttd-checkbox-label {
+  margin: 14px 0;
+  padding: 14px 16px;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95)) 60%, transparent) 0%,
+    color-mix(in srgb, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95)) 40%, transparent) 100%);
+  border: 1px solid color-mix(in srgb, var(--sttd-primary) 10%, var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08)));
+  border-radius: 10px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.sttd-checkbox-label::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--sttd-primary);
+  transform: scaleY(0);
+  transition: transform 0.2s ease;
+}
+
+.sttd-checkbox-label:hover {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95)) 80%, transparent) 0%,
+    color-mix(in srgb, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95)) 60%, transparent) 100%);
+  border-color: var(--sttd-primary);
+  transform: translateX(2px);
+}
+
+.sttd-checkbox-label:hover::before {
+  transform: scaleY(1);
+}
+
+.sttd-checkbox-label input[type="checkbox"]:checked + span {
+  color: var(--sttd-primary-bright);
+  font-weight: 600;
+}
+
+.sttd-checkbox-label input[type="checkbox"] {
+  transform: scale(1.1);
+  accent-color: var(--sttd-primary);
+}

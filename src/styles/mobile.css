@@ -1,0 +1,163 @@
+/* ============================================================================
+ * ST-TRANSLATE-DATA — MOBILE RESPONSIVE
+ * Must be last to override
+ * ============================================================================ */
+
+@media (max-width: 768px) {
+  /* Container adjustments */
+  .sttd-header {
+    padding: 10px 14px;
+  }
+
+  .sttd-header-icon {
+    font-size: 18px;
+  }
+
+  .sttd-header-title {
+    font-size: 13px;
+  }
+
+  .sttd-header-subtitle {
+    font-size: 10px;
+  }
+
+  .sttd-card-body {
+    padding: 10px;
+  }
+
+  .sttd-btn-row {
+    flex-direction: column;
+  }
+
+  .sttd-btn-row .sttd-card-header-actions {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .sttd-card-title {
+    font-size: 1em;
+  }
+
+  .sttd-card-title .sttd-icon {
+    width: 30px;
+    height: 30px;
+    font-size: 0.9em;
+  }
+
+  /* Form grid stacks to single column */
+  .sttd-form-grid,
+  .sttd-form-grid-three {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Input with button stacks */
+  .sttd-input-with-button {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sttd-input-with-button .sttd-btn {
+    width: 100%;
+  }
+
+  /* Character row stacks */
+  .sttd-character-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sttd-character-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  /* Status grid stacks */
+  .sttd-status-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Search/filter full width */
+  .sttd-filter,
+  .sttd-search-container {
+    width: 100%;
+  }
+
+  /* Lorebook list */
+  .sttd-lorebook-list {
+    max-height: 200px;
+  }
+
+  .sttd-lorebook-card {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  /* Drop zone */
+  .sttd-drop-zone {
+    padding: 1.5rem;
+  }
+
+  .sttd-drop-icon {
+    font-size: 2rem;
+  }
+
+  /* Progress bar */
+  .sttd-progress-bar {
+    height: 6px;
+  }
+
+  /* Modal/popup adjustments if any */
+  .sttd-popup-editor {
+    min-height: 300px;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  .sttd-header {
+    padding: 8px 12px;
+  }
+
+  .sttd-header-title {
+    font-size: 12px;
+  }
+
+  .sttd-card-header {
+    padding: 10px 12px;
+  }
+
+  .sttd-card-body {
+    padding: 8px;
+  }
+
+  .sttd-btn {
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+
+  .sttd-input,
+  .sttd-select,
+  .sttd-textarea {
+    padding: 10px 12px;
+    font-size: 14px; /* Prevents zoom on iOS */
+  }
+
+  .sttd-settings-body {
+    padding: 8px;
+  }
+}
+
+/* Print styles */
+@media print {
+  .sttd-header,
+  .sttd-btn-row,
+  .sttd-btn,
+  .sttd-toggle,
+  .sttd-drop-zone {
+    display: none;
+  }
+
+  .sttd-card {
+    break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
+}

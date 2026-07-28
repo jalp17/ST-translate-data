@@ -1,0 +1,89 @@
+/* ============================================================================
+ * ST-TRANSLATE-DATA — CUSTOM TOGGLE SWITCH
+ * TunnelVision-style animated toggle with gradient
+ * ============================================================================ */
+
+.sttd-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.sttd-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.sttd-toggle-slider {
+  position: relative;
+  width: 42px;
+  height: 22px;
+  background: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
+  border-radius: 11px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.sttd-toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 3px;
+  top: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.sttd-toggle input:checked + .sttd-toggle-slider {
+  background: var(--sttd-gradient);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--sttd-primary) 30%, transparent);
+}
+
+.sttd-toggle input:checked + .sttd-toggle-slider::before {
+  transform: translateX(20px);
+}
+
+.sttd-toggle input:focus + .sttd-toggle-slider {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sttd-primary) 20%, transparent);
+}
+
+.sttd-toggle-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--SmartThemeEmColor, #e6e6e6);
+}
+
+/* Toggle row (label + toggle on same line) */
+.sttd-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sttd-toggle-row .sttd-toggle {
+  flex-shrink: 0;
+}
+
+.sttd-toggle-row span {
+  font-size: 13px;
+  color: var(--SmartThemeEmColor, #e6e6e6);
+}
+
+/* Checkbox row (native checkbox) */
+.sttd-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sttd-checkbox-row input[type="checkbox"] {
+  accent-color: var(--sttd-primary);
+}

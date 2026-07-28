@@ -1,0 +1,153 @@
+/* ============================================================================
+ * ST-TRANSLATE-DATA — CARD SYSTEM
+ * Section cards with hover effects and collapsible headers
+ * ============================================================================ */
+
+.sttd-card {
+  background: var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95));
+  border: 1px solid color-mix(in srgb, var(--sttd-primary) 15%, var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08)));
+  border-radius: 12px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    0 1px 2px rgba(0, 0, 0, 0.15);
+  position: relative;
+}
+
+.sttd-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--sttd-primary) 40%, transparent) 50%,
+    transparent 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.sttd-card:hover {
+  border-color: var(--sttd-primary);
+  box-shadow:
+    0 8px 24px color-mix(in srgb, var(--sttd-primary) 20%, transparent),
+    0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.sttd-card:hover::before {
+  opacity: 1;
+}
+
+.sttd-card-header {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--sttd-primary) 12%, transparent) 0%,
+    color-mix(in srgb, var(--sttd-primary) 6%, transparent) 100%);
+  padding: 14px 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--sttd-primary) 15%, transparent);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sttd-card-title {
+  margin: 0;
+  color: var(--SmartThemeBodyColor, #e6e6e6);
+  font-size: 1.1em;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+  flex: 1;
+}
+
+.sttd-card-title .sttd-icon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--sttd-primary) 20%, transparent) 0%,
+    color-mix(in srgb, var(--sttd-primary) 10%, transparent) 100%);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sttd-primary-bright);
+  font-size: 1em;
+  border: 1px solid color-mix(in srgb, var(--sttd-primary) 25%, transparent);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--sttd-primary) 15%, transparent);
+}
+
+.sttd-card:hover .sttd-card-title .sttd-icon {
+  transform: scale(1.1) rotate(3deg);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--sttd-primary) 25%, transparent);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--sttd-primary) 30%, transparent) 0%,
+    color-mix(in srgb, var(--sttd-primary) 15%, transparent) 100%);
+}
+
+.sttd-card-subtitle {
+  margin: 6px 0 0 0;
+  color: color-mix(in srgb, var(--SmartThemeBodyColor, #e6e6e6) 70%, transparent);
+  font-size: 0.85em;
+  font-style: italic;
+  position: relative;
+  z-index: 1;
+}
+
+.sttd-card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.sttd-card-header-collapsible {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
+}
+
+.sttd-card-header-collapsible:hover {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--sttd-primary) 20%, transparent) 0%,
+    color-mix(in srgb, var(--sttd-primary) 10%, transparent) 100%);
+}
+
+.sttd-collapse-icon {
+  font-size: 11px;
+  opacity: 0.6;
+  transition: transform 0.3s ease;
+  color: var(--SmartThemeQuoteColor, #888);
+}
+
+.sttd-card-header-collapsible.expanded .sttd-collapse-icon {
+  transform: rotate(180deg);
+}
+
+.sttd-card-body {
+  padding: 18px;
+  background: var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95));
+}
+
+/* Disabled subsection within cards */
+.sttd-subsection-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 0.2s ease;
+}
+
+.sttd-subsection-disabled input[type="radio"],
+.sttd-subsection-disabled input[type="checkbox"] {
+  cursor: not-allowed;
+}

@@ -1,0 +1,247 @@
+/* ============================================================================
+ * ST-TRANSLATE-DATA — DROP ZONES
+ * Drag-and-drop file upload zones
+ * ============================================================================ */
+
+.sttd-drop-zone {
+  border: 2px dashed color-mix(in srgb, var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08)) 50%, transparent);
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: color-mix(in srgb, var(--sttd-primary) 2%, transparent);
+  position: relative;
+}
+
+.sttd-drop-zone:hover,
+.sttd-drop-zone.drag-over {
+  border-color: var(--sttd-primary);
+  background: color-mix(in srgb, var(--sttd-primary) 8%, transparent);
+  transform: scale(1.01);
+}
+
+.sttd-drop-zone.drag-over {
+  box-shadow: 0 0 20px color-mix(in srgb, var(--sttd-primary) 20%, transparent);
+}
+
+.sttd-drop-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--SmartThemeQuoteColor, #888);
+  transition: color 0.2s ease;
+}
+
+.sttd-drop-zone:hover .sttd-drop-icon,
+.sttd-drop-zone.drag-over .sttd-drop-icon {
+  color: var(--sttd-primary);
+}
+
+.sttd-drop-text {
+  font-size: 0.95rem;
+  color: var(--SmartThemeQuoteColor, #888);
+  margin-bottom: 0.5rem;
+}
+
+.sttd-drop-zone input[type="file"] {
+  display: none;
+}
+
+.sttd-drop-zone .sttd-hint {
+  margin-top: 1rem;
+}
+
+/* File list for batch uploads */
+.sttd-file-list {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.sttd-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--sttd-primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sttd-primary) 20%, transparent);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--SmartThemeBodyColor, #e6e6e6);
+}
+
+.sttd-file-chip .sttd-btn-icon {
+  padding: 2px 4px;
+  font-size: 11px;
+}
+
+/* ============================================================================
+ * SEARCH / FILTER INPUTS
+ * ============================================================================ */
+
+.sttd-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95));
+  border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.sttd-filter:focus-within {
+  border-color: color-mix(in srgb, var(--sttd-primary) 40%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sttd-primary) 10%, transparent);
+}
+
+.sttd-filter .sttd-icon {
+  color: var(--SmartThemeQuoteColor, #888);
+  font-size: 12px;
+}
+
+.sttd-filter input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--SmartThemeBodyColor, #e6e6e6);
+  font-size: 12px;
+  outline: none;
+  padding: 0;
+}
+
+.sttd-filter input::placeholder {
+  color: var(--SmartThemeQuoteColor, #666);
+}
+
+/* Search container (alternative) */
+.sttd-search-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--sttd-primary) 3%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95)));
+  border: 1px solid color-mix(in srgb, var(--sttd-secondary) 25%, transparent);
+  border-radius: 6px;
+  margin-bottom: 10px;
+  transition: border-color 0.2s ease;
+}
+
+.sttd-search-container:focus-within {
+  border-color: var(--sttd-secondary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sttd-secondary) 10%, transparent);
+}
+
+.sttd-search-icon {
+  color: var(--SmartThemeQuoteColor, #888);
+  font-size: 12px;
+}
+
+.sttd-search-input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--SmartThemeBodyColor, #e6e6e6);
+  font-size: 12px;
+  outline: none;
+}
+
+.sttd-search-clear {
+  opacity: 0.5;
+}
+
+.sttd-search-clear:hover {
+  opacity: 1;
+}
+
+/* ============================================================================
+ * LOREBOOK LIST (card-based, like TunnelVision)
+ * ============================================================================ */
+
+.sttd-lorebook-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.sttd-lorebook-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95));
+  transition: all 0.15s ease;
+}
+
+.sttd-lorebook-card:hover {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: color-mix(in srgb, var(--sttd-primary) 20%, transparent);
+}
+
+.sttd-lorebook-card.sttd-selected {
+  background: color-mix(in srgb, var(--sttd-primary) 10%, transparent);
+  border-color: color-mix(in srgb, var(--sttd-primary) 35%, transparent);
+}
+
+.sttd-lorebook-card:not(.sttd-active) {
+  opacity: 0.4;
+}
+
+.sttd-lorebook-card:not(.sttd-active):hover {
+  opacity: 0.55;
+}
+
+.sttd-lorebook-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sttd-dot-on {
+  background: var(--sttd-primary);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--sttd-primary) 50%, transparent);
+}
+
+.sttd-dot-ready {
+  background: color-mix(in srgb, var(--sttd-secondary) 50%, transparent);
+}
+
+.sttd-dot-off {
+  background: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
+}
+
+.sttd-lorebook-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.sttd-lorebook-card-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--SmartThemeEmColor, #e6e6e6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.sttd-lorebook-card-badges {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}

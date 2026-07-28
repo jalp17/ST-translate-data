@@ -1,0 +1,100 @@
+/* ============================================================================
+ * ST-TRANSLATE-DATA — BADGES & STATUS INDICATORS
+ * ============================================================================ */
+
+.sttd-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.sttd-badge-inactive {
+  color: var(--SmartThemeQuoteColor, #888);
+  opacity: 0.7;
+  background: transparent;
+}
+
+.sttd-badge-active {
+  background: color-mix(in srgb, var(--sttd-success) 15%, transparent);
+  color: var(--sttd-success);
+}
+
+.sttd-badge-tv-on {
+  background: color-mix(in srgb, var(--sttd-primary) 15%, transparent);
+  color: var(--sttd-primary-bright);
+}
+
+.sttd-badge-tv-on .sttd-icon {
+  font-size: 8px;
+}
+
+.sttd-badge-ready {
+  background: color-mix(in srgb, var(--sttd-secondary) 15%, transparent);
+  color: var(--sttd-secondary);
+}
+
+.sttd-badge-warning {
+  background: color-mix(in srgb, var(--sttd-warning) 15%, transparent);
+  color: var(--sttd-warning);
+}
+
+.sttd-badge-danger {
+  background: color-mix(in srgb, var(--sttd-danger) 15%, transparent);
+  color: var(--sttd-danger);
+}
+
+/* Default / Recommended badges for radio options */
+.sttd-badge-default {
+  background: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
+  color: var(--SmartThemeBodyColor, #e6e6e6);
+}
+
+.sttd-badge-recommended {
+  background: var(--sttd-gradient);
+  color: white;
+}
+
+/* ============================================================================
+ * COUNT BADGE (for category counts)
+ * ============================================================================ */
+
+.sttd-count-badge {
+  font-size: 10px;
+  padding: 1px 7px;
+  background: var(--sttd-gradient);
+  color: white;
+  border-radius: 10px;
+  font-weight: 600;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* ============================================================================
+ * DOT INDICATOR (for status dots in lists)
+ * ============================================================================ */
+
+.sttd-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.sttd-dot-on {
+  background: var(--sttd-primary);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--sttd-primary) 50%, transparent);
+}
+
+.sttd-dot-ready {
+  background: color-mix(in srgb, var(--sttd-secondary) 50%, transparent);
+}
+
+.sttd-dot-off {
+  background: var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
+}

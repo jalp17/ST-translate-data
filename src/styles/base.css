@@ -1,0 +1,156 @@
+/* ============================================================================
+ * ST-TRANSLATE-DATA — BASE STYLES
+ * CSS variables, main container, collapsible header
+ * Namespace: .sttd-
+ * ============================================================================ */
+
+:root {
+  --sttd-primary: #6366f1;
+  --sttd-primary-bright: #818cf8;
+  --sttd-secondary: #8b5cf6;
+  --sttd-success: #10b981;
+  --sttd-warning: #f59e0b;
+  --sttd-danger: #ef4444;
+
+  --sttd-gradient: linear-gradient(135deg, var(--sttd-primary) 0%, var(--sttd-secondary) 100%);
+  --sttd-gradient-bg: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.06) 100%);
+  --sttd-border: rgba(99, 102, 241, 0.35);
+  --sttd-radius: 10px;
+  --sttd-transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================================================
+ * ICON HELPERS
+ * ============================================================================ */
+
+.sttd-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+ * MAIN CONTAINER
+ * ============================================================================ */
+
+.sttd-container {
+  margin: 10px 0;
+  border-radius: var(--sttd-radius);
+  overflow: hidden;
+  background: var(--sttd-gradient-bg);
+  border: 1px solid var(--sttd-border);
+}
+
+/* ============================================================================
+ * COLLAPSIBLE HEADER (TunnelVision pattern)
+ * ============================================================================ */
+
+.sttd-header {
+  background: var(--sttd-gradient);
+  border-radius: var(--sttd-radius) var(--sttd-radius) 0 0;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: filter var(--sttd-transition);
+}
+
+.sttd-header:hover {
+  filter: brightness(1.08);
+}
+
+.sttd-header-icon {
+  font-size: 22px;
+  color: white;
+  animation: sttd-float 3s ease-in-out infinite;
+}
+
+@keyframes sttd-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+.sttd-header-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.sttd-header-title {
+  color: white;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.sttd-header-subtitle {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 11px;
+}
+
+.sttd-header-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 10px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.sttd-header-chevron {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  transition: transform 0.3s ease;
+}
+
+.sttd-header.expanded .sttd-header-chevron {
+  transform: rotate(180deg);
+}
+
+/* ============================================================================
+ * SETTINGS BODY (collapsible content)
+ * ============================================================================ */
+
+.sttd-settings-body {
+  padding: 12px;
+}
+
+/* ============================================================================
+ * DESCRIPTION BOX
+ * ============================================================================ */
+
+.sttd-description {
+  font-size: 12px;
+  opacity: 0.8;
+  padding: 10px 12px;
+  background: rgba(99, 102, 241, 0.12);
+  border-left: 3px solid var(--sttd-primary);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+/* ============================================================================
+ * UTILITY CLASSES
+ * ============================================================================ */
+
+.sttd-hidden {
+  display: none !important;
+}
+
+.sttd-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

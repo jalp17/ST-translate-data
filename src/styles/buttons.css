@@ -1,0 +1,148 @@
+/* ============================================================================
+ * ST-TRANSLATE-DATA — BUTTON STYLES
+ * Action buttons, primary/secondary/danger variants, button rows
+ * ============================================================================ */
+
+.sttd-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 1rem;
+}
+
+.sttd-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: none;
+  flex: 1;
+  min-width: 160px;
+}
+
+.sttd-btn-primary {
+  background: var(--sttd-gradient);
+  color: white;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--sttd-primary) 30%, transparent);
+}
+
+.sttd-btn-primary:hover {
+  background: linear-gradient(135deg, var(--sttd-primary-bright) 0%, var(--sttd-secondary) 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--sttd-primary) 40%, transparent);
+}
+
+.sttd-btn-primary:active {
+  transform: translateY(0);
+}
+
+.sttd-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.sttd-btn-secondary {
+  background: color-mix(in srgb, var(--sttd-secondary) 15%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95)));
+  color: var(--SmartThemeBodyColor, #e6e6e6);
+  border: 1px solid color-mix(in srgb, var(--sttd-secondary) 30%, var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08)));
+}
+
+.sttd-btn-secondary:hover {
+  background: color-mix(in srgb, var(--sttd-secondary) 25%, var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95)));
+  border-color: color-mix(in srgb, var(--sttd-secondary) 50%, var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08)));
+}
+
+.sttd-btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Icon-only button */
+.sttd-btn-icon {
+  background: none;
+  border: none;
+  color: var(--SmartThemeQuoteColor, #888);
+  cursor: pointer;
+  padding: 8px 10px;
+  font-size: 14px;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  flex: 0 0 auto;
+}
+
+.sttd-btn-icon:hover {
+  color: var(--sttd-primary);
+  background: color-mix(in srgb, var(--sttd-primary) 10%, transparent);
+}
+
+.sttd-btn-danger-icon:hover {
+  color: var(--sttd-danger) !important;
+  background: color-mix(in srgb, var(--sttd-danger) 10%, transparent) !important;
+}
+
+/* Global actions row (smaller buttons) */
+.sttd-global-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 0.75rem;
+}
+
+.sttd-global-actions .sttd-btn {
+  padding: 8px 14px;
+  font-size: 12px;
+  min-width: 140px;
+}
+
+/* Build help text */
+.sttd-build-help {
+  font-size: 11px;
+  opacity: 0.6;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+/* ============================================================================
+ * STATUS BAR
+ * ============================================================================ */
+
+.sttd-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--SmartThemeBlurTintColor, rgba(30, 30, 30, 0.95));
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--SmartThemeQuoteColor, #aaa);
+}
+
+.sttd-status-bar .sttd-icon {
+  color: var(--sttd-secondary);
+  font-size: 12px;
+}
+
+/* ============================================================================
+ * COUNT BADGE
+ * ============================================================================ */
+
+.sttd-count-badge {
+  font-size: 10px;
+  padding: 1px 7px;
+  background: var(--sttd-gradient);
+  color: white;
+  border-radius: 10px;
+  font-weight: 600;
+  min-width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}

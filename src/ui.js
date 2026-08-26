@@ -21,27 +21,30 @@ export async function initializeExtensionPanel() {
     }
 
     try {
-      let settingsHtml = await context.renderExtensionTemplateAsync('third-party/ST-translate-data', 'settings');
-      if (!settingsHtml) {
-        const currentScript = document.currentScript || document.querySelector('script[src*="script.js"]');
-        const baseUrl = currentScript?.src ? currentScript.src.replace(/\/[^/]*$/, '/') : null;
-        const candidates = [];
+      const currentScript = document.currentScript || document.querySelector('script[src*="script.js"]');
+      const scriptSrc = currentScript?.src;
+      const extensionNameMatch = scriptSrc ? scriptSrc.match(/\/scripts\/extensions\/(.+?)\/dist\/script\.js$/) : null;
+      const extensionName = extensionNameMatch ? extensionNameMatch[1] : null;
 
-        if (baseUrl) {
-          candidates.push(new URL('settings.html', baseUrl).href);
-          candidates.push(new URL('../settings.html', baseUrl).href);
+      let settingsHtml = null;
+      if (extensionName) {
+        try {
+          settingsHtml = await context.renderExtensionTemplateAsync(extensionName, 'settings');
+        } catch (error) {
+          console.warn('ST-Universal-Translator: renderExtensionTemplateAsync failed', error);
         }
+      }
 
-        for (const url of candidates) {
-          try {
-            const settingsResponse = await fetch(url);
-            if (settingsResponse.ok) {
-              settingsHtml = await settingsResponse.text();
-              break;
-            }
-          } catch {
-            // ignore failed candidate
+      if (!settingsHtml && scriptSrc) {
+        const baseUrl = scriptSrc.replace(/\/[^/]*$/, '/');
+        const fallbackUrl = new URL('../settings.html', baseUrl).href;
+        try {
+          const settingsResponse = await fetch(fallbackUrl);
+          if (settingsResponse.ok) {
+            settingsHtml = await settingsResponse.text();
           }
+        } catch {
+          // ignore fallback failure
         }
       }
 

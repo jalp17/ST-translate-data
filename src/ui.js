@@ -214,7 +214,7 @@ export function attachTranslatorSettingsEvents() {
   }
 
   function updateModelSuggestionList(provider) {
-    console.log('ST Translator: updating model suggestions for provider', provider);
+    console.debug('ST Translator: updating model suggestions for provider', provider);
     const suggestions = MODEL_SUGGESTIONS[provider] || [];
     const listElement = document.getElementById('modelSuggestions');
     const selectElement = document.getElementById('modelSelect');
@@ -255,13 +255,13 @@ export function attachTranslatorSettingsEvents() {
       apiUrl: apiUrlInput.value.trim() || undefined,
       model: modelInput.value.trim() || undefined,
     };
-    console.log('ST Translator: initial provider config', config);
+    console.debug('ST Translator: initial provider config', config);
 
     const mode = connectionModeSelect.value;
     if (mode === 'st_global') {
       const inferred = getInferredSTProfile();
       if (inferred) {
-        console.log('ST Translator: using inferred ST profile', inferred);
+        console.debug('ST Translator: using inferred ST profile', inferred);
         if (inferred.apiKey) config.apiKey = inferred.apiKey;
         if (inferred.apiUrl) config.apiUrl = inferred.apiUrl;
         if (inferred.provider) config.provider = inferred.provider;
@@ -279,7 +279,7 @@ export function attachTranslatorSettingsEvents() {
 
           const rawProvider = profile.provider || profile.api || profile.service || profile.type || profile.backend || profile.engine || profile.modelProvider || profile.providerType || profile.connectionType || profile.provider_name || profile.api_type;
           const resolvedProvider = normalizeProviderKey(rawProvider) || guessProviderFromUrl(profile.apiUrl);
-          console.log('ST Translator: resolved provider from profile override', resolvedProvider, 'from rawProvider', rawProvider);
+          console.debug('ST Translator: resolved provider from profile override', resolvedProvider, 'from rawProvider', rawProvider);
           if (resolvedProvider && Array.from(providerSelect.options).some((option) => option.value === resolvedProvider)) {
             config.provider = resolvedProvider;
           } else if (profile.provider) {
@@ -293,12 +293,12 @@ export function attachTranslatorSettingsEvents() {
       }
     }
 
-    console.log('ST Translator: final provider config', config);
+    console.debug('ST Translator: final provider config', config);
     return config;
   }
 
   function validateProviderConfig(config) {
-    console.log('ST Translator: validating provider config', config);
+    console.debug('ST Translator: validating provider config', config);
     if (!config.provider) {
       throw new Error('Debe seleccionar un proveedor de traducción.');
     }
@@ -540,11 +540,11 @@ export function attachTranslatorSettingsEvents() {
   }
 
   async function findSavedApiKeyProfiles() {
-    console.log('ST Translator: finding saved API key profiles');
+    console.debug('ST Translator: finding saved API key profiles');
     const candidates = [];
     const contextProfiles = window.SillyTavern?.getContext?.()?.extensionSettings?.connectionManager?.profiles;
     if (Array.isArray(contextProfiles)) {
-      console.log('ST Translator: found profiles from SillyTavern context', contextProfiles);
+      console.debug('ST Translator: found profiles from SillyTavern context', contextProfiles);
     }
     const sources = [
       window.SillyTavern?.connectionManager?.profiles,
@@ -566,7 +566,7 @@ export function attachTranslatorSettingsEvents() {
     for (const source of sources) {
       try {
         let value;
-        console.log('ST Translator: checking profile source', source);
+        console.debug('ST Translator: checking profile source', source);
         if (typeof source === 'function') {
           const boundSource = source.bind(window.SillyTavern || window);
           value = await boundSource();
@@ -575,10 +575,10 @@ export function attachTranslatorSettingsEvents() {
         }
 
         if (!value) {
-          console.log('ST Translator: profile source returned empty', source);
+          console.debug('ST Translator: profile source returned empty', source);
           continue;
         }
-        console.log('ST Translator: profile source value type', typeof value, value);
+        console.debug('ST Translator: profile source value type', typeof value, value);
         if (Array.isArray(value)) {
           candidates.push(...value);
           continue;
@@ -595,12 +595,12 @@ export function attachTranslatorSettingsEvents() {
     const normalizedProfiles = candidates
       .map(normalizeProfile)
       .filter((profile) => profile && (profile.apiKey || profile.apiUrl));
-    console.log('ST Translator: normalized saved profiles', normalizedProfiles);
+    console.debug('ST Translator: normalized saved profiles', normalizedProfiles);
     return normalizedProfiles;
   }
 
   function populateApiKeyProfiles(profiles) {
-    console.log('ST Translator: populating profile dropdown', profiles);
+    console.debug('ST Translator: populating profile dropdown', profiles);
     savedConnectionProfiles = profiles;
     apiKeyProfileSelect.innerHTML = '';
     const defaultOption = document.createElement('option');
@@ -625,9 +625,9 @@ export function attachTranslatorSettingsEvents() {
   }
 
   function applyProfileProviderSettings(profile) {
-    console.log('ST Translator: applying profile settings', profile);
+    console.debug('ST Translator: applying profile settings', profile);
     const normalizedProvider = normalizeProviderKey(profile.provider || profile.api) || guessProviderFromUrl(profile.apiUrl);
-    console.log('ST Translator: normalized provider from profile', normalizedProvider);
+    console.debug('ST Translator: normalized provider from profile', normalizedProvider);
     if (normalizedProvider && Array.from(providerSelect.options).some((option) => option.value === normalizedProvider)) {
       providerSelect.value = normalizedProvider;
     }
@@ -661,14 +661,14 @@ export function attachTranslatorSettingsEvents() {
 
   function applyProfileSelection() {
     const profileIndex = apiKeyProfileSelect.value;
-    console.log('ST Translator: profile selection changed', profileIndex);
+    console.debug('ST Translator: profile selection changed', profileIndex);
     if (!profileIndex) {
       updateProviderStatusMessage();
       return;
     }
 
     const profile = savedConnectionProfiles[Number(profileIndex)];
-    console.log('ST Translator: selected saved profile', profile);
+    console.debug('ST Translator: selected saved profile', profile);
     if (!profile) {
       return;
     }
@@ -792,13 +792,13 @@ export function attachTranslatorSettingsEvents() {
 
   providerSelect.addEventListener('change', () => {
     const newProvider = providerSelect.value;
-    console.log('ST Translator: provider selection changed from', lastProviderSelection, 'to', newProvider);
+    console.debug('ST Translator: provider selection changed from', lastProviderSelection, 'to', newProvider);
     updateApiSettingsForProvider(newProvider, lastProviderSelection);
     updateModelSuggestionList(newProvider);
     updateProviderStatusMessage();
     updateStatusDetails();
     lastProviderSelection = newProvider;
-    console.log('Proveedor seleccionado:', newProvider, 'URL actual:', apiUrlInput.value);
+    console.debug('Proveedor seleccionado:', newProvider, 'URL actual:', apiUrlInput.value);
   });
 
   apiUrlInput.addEventListener('input', () => {
@@ -832,8 +832,8 @@ export function attachTranslatorSettingsEvents() {
 
     try {
       const providerConfig = validateProviderConfig(buildProviderConfig());
-      console.log('ST Translator: starting PNG translation', providerConfig);
-      console.log('Iniciando traducción de PNG con configuración:', providerConfig);
+      console.debug('ST Translator: starting PNG translation', providerConfig);
+      console.debug('Iniciando traducción de PNG con configuración:', providerConfig);
       const translatedBlob = await window.STUniversalTranslator.translateCharacterCard(
         translatorSelectedFile,
         sourceLangSelect.value,
@@ -864,8 +864,8 @@ export function attachTranslatorSettingsEvents() {
 
     try {
       const providerConfig = validateProviderConfig(buildProviderConfig());
-      console.log('ST Translator: starting image batch translation', providerConfig);
-      console.log('Iniciando traducción de lote de imágenes con configuración:', providerConfig);
+      console.debug('ST Translator: starting image batch translation', providerConfig);
+      console.debug('Iniciando traducción de lote de imágenes con configuración:', providerConfig);
       const results = await window.STUniversalTranslator.translateImageBatch(
         files,
         sourceLangSelect.value,
@@ -876,7 +876,7 @@ export function attachTranslatorSettingsEvents() {
       );
 
       statusText.textContent = `Traducción de lote completada (${results.length} imágenes).`;
-      console.log('Image batch results:', results);
+      console.debug('Image batch results:', results);
       updateProgress(100);
     } catch (error) {
       handleTranslationError(error, 'Error durante la traducción de lote.');
@@ -903,8 +903,8 @@ export function attachTranslatorSettingsEvents() {
 
     try {
       const providerConfig = validateProviderConfig(buildProviderConfig());
-      console.log('ST Translator: starting lorebook translation', providerConfig);
-      console.log('Iniciando traducción de lorebook con configuración:', providerConfig);
+      console.debug('ST Translator: starting lorebook translation', providerConfig);
+      console.debug('Iniciando traducción de lorebook con configuración:', providerConfig);
       const translatedLorebook = await window.STUniversalTranslator.translateLorebook(
         selectedLorebook,
         sourceLangSelect.value,
@@ -914,7 +914,7 @@ export function attachTranslatorSettingsEvents() {
       );
 
       statusText.textContent = 'Lorebook traducido correctamente.';
-      console.log('Translated lorebook:', translatedLorebook);
+      console.debug('Translated lorebook:', translatedLorebook);
       updateProgress(100);
     } catch (error) {
       handleTranslationError(error, 'Error durante la traducción del lorebook.');
@@ -944,8 +944,8 @@ export function attachTranslatorSettingsEvents() {
 
     try {
       const providerConfig = validateProviderConfig(buildProviderConfig());
-      console.log('ST Translator: starting character translation', providerConfig);
-      console.log('Iniciando traducción de personajes con configuración:', providerConfig);
+      console.debug('ST Translator: starting character translation', providerConfig);
+      console.debug('Iniciando traducción de personajes con configuración:', providerConfig);
       const translatedCharacters = await window.STUniversalTranslator.translateCharacters(
         selectedItems,
         sourceLangSelect.value,
@@ -961,7 +961,7 @@ export function attachTranslatorSettingsEvents() {
       }
 
       statusText.textContent = 'Personajes seleccionados traducidos correctamente.';
-      console.log('Translated characters:', translatedCharacters);
+      console.debug('Translated characters:', translatedCharacters);
       updateProgress(100);
     } catch (error) {
       handleTranslationError(error, 'Error durante la traducción de personajes seleccionados.');

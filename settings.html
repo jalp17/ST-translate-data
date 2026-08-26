@@ -1,22 +1,22 @@
 
-<div class="translator-panel inline-drawer">
-  <div class="inline-drawer-toggle inline-drawer-header">
-    <div class="flex-container alignitemscenter margin0">
+<div class="sttd-translator-panel inline-drawer">
+  <div class="sttd-inline-drawer-toggle inline-drawer-header">
+    <div class="sttd-flex-container sttd-align-center sttd-margin0">
       <b>ST Universal Translator</b>
-      <i id="translatorExtensionPopoutButton" class="fa-solid fa-window-restore menu_button margin0"></i>
+      <i id="translatorExtensionPopoutButton" class="fa-solid fa-window-restore sttd-button sttd-margin0"></i>
     </div>
-    <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+    <div class="inline-drawer-icon fa-solid fa-circle-chevron-down sttd-down"></div>
   </div>
 
-  <div class="inline-drawer-content">
-    <div class="translator-panel-content">
+  <div class="sttd-inline-drawer-content">
+    <div class="sttd-panel-content">
 
-      <div class="section-card">
-        <div class="section-title"><i class="fa-solid fa-language"></i> Idioma y proveedor</div>
-        <div class="form-grid three-cols">
+      <div class="sttd-section-card">
+        <div class="sttd-section-title"><i class="fa-solid fa-language"></i> Idioma y proveedor</div>
+        <div class="sttd-form-grid sttd-three-cols">
           <div>
             <label for="sourceLang">Idioma origen</label>
-            <select id="sourceLang" data-key="sourceLang" class="text_pole">
+            <select id="sourceLang" data-key="sourceLang" class="sttd-input">
               <option value="auto">Detectar automáticamente</option>
               <option value="en">Inglés</option>
               <option value="es" selected>Español</option>
@@ -32,7 +32,7 @@
 
           <div>
             <label for="targetLang">Idioma destino</label>
-            <select id="targetLang" data-key="targetLang" class="text_pole">
+            <select id="targetLang" data-key="targetLang" class="sttd-input">
               <option value="es" selected>Español</option>
               <option value="en">Inglés</option>
               <option value="pt">Portugués</option>
@@ -47,7 +47,7 @@
 
           <div>
             <label for="providerSelect">Proveedor</label>
-            <select id="providerSelect" data-key="providerSelect" class="text_pole">
+            <select id="providerSelect" data-key="providerSelect" class="sttd-input">
               <option value="openai" selected>OpenAI</option>
               <option value="local_koboldcpp">KoboldCPP</option>
               <option value="llama_cpp">llama.cpp</option>
@@ -61,10 +61,10 @@
           </div>
         </div>
 
-        <div class="form-grid" style="margin-top: 0.9rem;">
+        <div class="sttd-form-grid" style="margin-top: 0.9rem;">
           <div>
             <label for="modelInput">Modelo</label>
-            <input id="modelInput" data-key="modelInput" class="text_pole" type="text" placeholder="Ej: gpt-3.5-turbo, gpt-4, llama2" list="modelSuggestions" />
+            <input id="modelInput" data-key="modelInput" class="sttd-input" type="text" placeholder="Ej: gpt-3.5-turbo, gpt-4, llama2" list="modelSuggestions" />
             <datalist id="modelSuggestions">
               <option value="gpt-3.5-turbo"></option>
               <option value="gpt-4"></option>
@@ -78,174 +78,174 @@
 
           <div>
             <label for="apiUrl">Endpoint URL</label>
-            <input id="apiUrl" data-key="apiUrl" class="text_pole" type="text" placeholder="https://api.openai.com/v1/chat/completions" />
-            <div id="providerStatusText" class="hint-text">Se usará el endpoint predeterminado del proveedor.</div>
+            <input id="apiUrl" data-key="apiUrl" class="sttd-input" type="text" placeholder="https://api.openai.com/v1/chat/completions" />
+            <div id="providerStatusText" class="sttd-hint">Se usará el endpoint predeterminado del proveedor.</div>
           </div>
         </div>
 
-        <div class="status-grid">
-          <div class="status-item">
-            <span class="status-label">Estado</span>
-            <span id="statusDetailsText" class="status-value">Configuración manual</span>
+        <div class="sttd-status-grid">
+          <div class="sttd-status-item">
+            <span class="sttd-status-label">Estado</span>
+            <span id="statusDetailsText" class="sttd-status-value">Configuración manual</span>
           </div>
-          <div class="status-item">
-            <span class="status-label">API Key</span>
-            <span id="apiKeyStatusText" class="status-value">No configurada</span>
+          <div class="sttd-status-item">
+            <span class="sttd-status-label">API Key</span>
+            <span id="apiKeyStatusText" class="sttd-status-value">No configurada</span>
           </div>
         </div>
       </div>
 
-      <div class="section-card">
-        <div class="section-title"><i class="fa-solid fa-key"></i> Credenciales</div>
-        <div class="form-grid">
-          <div class="full-width">
+      <div class="sttd-section-card">
+        <div class="sttd-section-title"><i class="fa-solid fa-key"></i> Credenciales</div>
+        <div class="sttd-form-grid">
+          <div class="sttd-full-width">
             <label for="connectionModeSelect">Modo de configuración</label>
-            <select id="connectionModeSelect" data-key="connectionModeSelect" class="text_pole">
+            <select id="connectionModeSelect" data-key="connectionModeSelect" class="sttd-input">
               <option value="manual" selected>Configuración manual</option>
               <option value="saved_profile">Usar perfil guardado</option>
               <option value="st_global">Usar configuración ST global</option>
             </select>
           </div>
 
-          <div class="full-width">
+          <div class="sttd-full-width">
             <label for="apiKey">API key</label>
-            <div class="input-with-button">
-              <input id="apiKey" data-key="apiKey" class="text_pole" type="text" placeholder="Clave de API (opcional según proveedor)" />
-              <button id="apiKeyLoadButton" type="button" class="menu_button">Cargar desde perfil</button>
+            <div class="sttd-input-with-button">
+              <input id="apiKey" data-key="apiKey" class="sttd-input" type="text" placeholder="Clave de API (opcional según proveedor)" />
+              <button id="apiKeyLoadButton" type="button" class="sttd-button">Cargar desde perfil</button>
             </div>
           </div>
 
-          <div class="full-width">
+          <div class="sttd-full-width">
             <label for="apiKeyProfileSelect">Perfil de conexión guardado</label>
-            <div class="input-with-button">
-              <select id="apiKeyProfileSelect" data-key="apiKeyProfileSelect" class="text_pole">
+            <div class="sttd-input-with-button">
+              <select id="apiKeyProfileSelect" data-key="apiKeyProfileSelect" class="sttd-input">
                 <option value="">Seleccione un perfil</option>
               </select>
-              <button id="refreshProfilesButton" type="button" class="menu_button">Refrescar</button>
+              <button id="refreshProfilesButton" type="button" class="sttd-button">Refrescar</button>
             </div>
           </div>
 
-          <div class="full-width checkbox-group">
+          <div class="sttd-full-width sttd-checkbox-group">
             <label class="checkbox-label">
               <input id="useProfileProvider" data-key="useProfileProvider" type="checkbox" />
               Usar proveedor y endpoint del perfil
             </label>
           </div>
 
-          <div class="full-width">
+          <div class="sttd-full-width">
             <label for="batchDelay">Delay entre envíos (ms)</label>
-            <input id="batchDelay" data-key="batchDelay" class="text_pole" type="number" min="0" step="50" value="500" />
+            <input id="batchDelay" data-key="batchDelay" class="sttd-input" type="number" min="0" step="50" value="500" />
           </div>
         </div>
-        <div class="hint-text">
+        <div class="sttd-hint">
           El modo de perfil guardado reutiliza las conexiones existentes de SillyTavern. El modo global detecta la configuración activa automáticamente.
         </div>
         <div class="global-actions">
-          <button id="importStGlobalConfigButton" type="button" class="menu_button">
+          <button id="importStGlobalConfigButton" type="button" class="sttd-button">
             <i class="fa-solid fa-file-import"></i> Importar configuración ST global
           </button>
-          <button id="refreshGlobalStatusButton" type="button" class="menu_button">
+          <button id="refreshGlobalStatusButton" type="button" class="sttd-button">
             <i class="fa-solid fa-rotate"></i> Refrescar estado global
           </button>
         </div>
       </div>
 
-      <div class="section-card">
-        <div class="section-title"><i class="fa-solid fa-file-image"></i> Importar imágenes</div>
-        <div class="form-grid">
-          <div class="full-width">
+      <div class="sttd-section-card">
+        <div class="sttd-section-title"><i class="fa-solid fa-file-image"></i> Importar imágenes</div>
+        <div class="sttd-form-grid">
+          <div class="sttd-full-width">
             <label>Tarjeta de personaje (PNG)</label>
-            <div id="pngDropZone" class="drop-zone">
-              <div class="drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
-              <div class="drop-text">Arrastra un PNG aquí o haz clic para seleccionar</div>
+            <div id="pngDropZone" class="sttd-drop-zone">
+              <div class="sttd-drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+              <div class="sttd-drop-text">Arrastra un PNG aquí o haz clic para seleccionar</div>
               <input id="pngInput" type="file" accept="image/png" style="display: none;" />
-              <div id="selectedFileName" class="hint-text" style="margin-top: 0.5rem;"></div>
+              <div id="selectedFileName" class="sttd-hint" style="margin-top: 0.5rem;"></div>
             </div>
           </div>
 
-          <div class="full-width">
+          <div class="sttd-full-width">
             <label>Lote de imágenes PNG</label>
-            <div id="pngBatchDropZone" class="drop-zone">
-              <div class="drop-icon"><i class="fa-solid fa-images"></i></div>
-              <div class="drop-text">Arrastra múltiples PNG aquí o haz clic para seleccionar</div>
+            <div id="pngBatchDropZone" class="sttd-drop-zone">
+              <div class="sttd-drop-icon"><i class="fa-solid fa-images"></i></div>
+              <div class="sttd-drop-text">Arrastra múltiples PNG aquí o haz clic para seleccionar</div>
               <input id="pngBatchInput" type="file" accept="image/png" multiple style="display: none;" />
-              <div id="selectedBatchCount" class="hint-text" style="margin-top: 0.5rem;"></div>
+              <div id="selectedBatchCount" class="sttd-hint" style="margin-top: 0.5rem;"></div>
             </div>
           </div>
 
-          <div class="full-width">
+          <div class="sttd-full-width">
             <label for="outputFolder">Carpeta de salida (imágenes)</label>
-            <input id="outputFolder" data-key="outputFolder" class="text_pole" type="text" placeholder="ruta/de/salida/o/nombre-de-carpeta" />
+            <input id="outputFolder" data-key="outputFolder" class="sttd-input" type="text" placeholder="ruta/de/salida/o/nombre-de-carpeta" />
           </div>
         </div>
         <div class="button-row">
-          <button id="translatePngButton" type="button" class="menu_button primary">
+          <button id="translatePngButton" type="button" class="sttd-button primary">
             <i class="fa-solid fa-image"></i> Traducir tarjeta PNG
           </button>
-          <button id="translateImageBatchButton" type="button" class="menu_button primary">
+          <button id="translateImageBatchButton" type="button" class="sttd-button primary">
             <i class="fa-solid fa-images"></i> Traducir lote de imágenes
           </button>
         </div>
       </div>
 
-      <div class="section-card">
-        <div class="section-title"><i class="fa-solid fa-users"></i> Personajes</div>
-        <div class="form-grid full-width">
-          <div class="search-box">
+      <div class="sttd-section-card">
+        <div class="sttd-section-title"><i class="fa-solid fa-users"></i> Personajes</div>
+        <div class="sttd-form-grid sttd-full-width">
+          <div class="sttd-search-box">
             <label for="characterSearch">Buscar personaje</label>
-            <i class="fa-solid fa-magnifying-glass search-icon"></i>
-            <input id="characterSearch" class="text_pole" type="text" placeholder="Escribe para filtrar..." />
+            <i class="fa-solid fa-magnifying-glass sttd-search-icon"></i>
+            <input id="characterSearch" class="sttd-input" type="text" placeholder="Escribe para filtrar..." />
           </div>
         </div>
         <div class="character-row" style="margin-top: 0.9rem;">
           <div>
             <label for="characterBatchSelect">Seleccionar personajes</label>
-            <select id="characterBatchSelect" multiple size="8" class="text_pole"></select>
+            <select id="characterBatchSelect" multiple size="8" class="sttd-input"></select>
           </div>
           <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-            <button id="refreshCharacterListButton" type="button" class="menu_button">
+            <button id="refreshCharacterListButton" type="button" class="sttd-button">
               <i class="fa-solid fa-rotate"></i> Refrescar
             </button>
-            <button id="selectAllCharactersButton" type="button" class="menu_button">
+            <button id="selectAllCharactersButton" type="button" class="sttd-button">
               <i class="fa-solid fa-check-double"></i> Seleccionar todo
             </button>
-            <button id="clearCharacterSelectionButton" type="button" class="menu_button">
+            <button id="clearCharacterSelectionButton" type="button" class="sttd-button">
               <i class="fa-solid fa-xmark"></i> Limpiar
             </button>
           </div>
         </div>
         <div class="button-row">
-          <button id="translateSelectedCharactersButton" type="button" class="menu_button primary">
+          <button id="translateSelectedCharactersButton" type="button" class="sttd-button primary">
             <i class="fa-solid fa-language"></i> Traducir personajes seleccionados
           </button>
         </div>
       </div>
 
-      <div class="section-card">
-        <div class="section-title"><i class="fa-solid fa-book"></i> Lorebook</div>
-        <div class="form-grid">
-          <div class="full-width">
+      <div class="sttd-section-card">
+        <div class="sttd-section-title"><i class="fa-solid fa-book"></i> Lorebook</div>
+        <div class="sttd-form-grid">
+          <div class="sttd-full-width">
             <label for="lorebookSelect">Lorebook actual</label>
-            <div class="input-with-button">
-              <select id="lorebookSelect" class="text_pole">
+            <div class="sttd-input-with-button">
+              <select id="lorebookSelect" class="sttd-input">
                 <option value="">Cargando lorebooks...</option>
               </select>
-              <button id="refreshLorebookListButton" type="button" class="menu_button">
+              <button id="refreshLorebookListButton" type="button" class="sttd-button">
                 <i class="fa-solid fa-rotate"></i> Refrescar
               </button>
             </div>
-            <div id="lorebookStatusText" class="hint-text">Se traducirán las entradas del lorebook seleccionado.</div>
+            <div id="lorebookStatusText" class="sttd-hint">Se traducirán las entradas del lorebook seleccionado.</div>
           </div>
         </div>
         <div class="button-row">
-          <button id="translateLorebookButton" type="button" class="menu_button primary">
+          <button id="translateLorebookButton" type="button" class="sttd-button primary">
             <i class="fa-solid fa-language"></i> Traducir lorebook seleccionado
           </button>
         </div>
       </div>
 
       <div class="progress">
-        <div id="translationProgress" class="progress-bar"></div>
+        <div id="translationProgress" class="sttd-progress-bar"></div>
       </div>
       <div id="statusText" class="status-text">Listo</div>
     </div>

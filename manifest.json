@@ -3,6 +3,7 @@
   "name": "ST-translate-data",
   "loading_order": 100,
   "js": "dist/script.js",
+  "css": "src/styles/main.css",
   "hooks": {
     "activate": "onActivate"
   },

@@ -1,4 +1,7 @@
 import { DEFAULT_ENDPOINTS } from './translateProviders.js';
+import { populateForm, bindAutoSave } from './ui/settings.js';
+
+export { populateForm, bindAutoSave } from './ui/settings.js';
 
 export async function initializeExtensionPanel() {
   const tryRenderSettings = async () => {
@@ -58,6 +61,8 @@ export async function initializeExtensionPanel() {
           (document.head || document.documentElement).appendChild(link);
         }
         attachTranslatorSettingsEvents();
+        populateForm();
+        bindAutoSave();
       }
     } catch (error) {
       console.warn('ST-Universal-Translator: error al cargar el panel de configuración', error);

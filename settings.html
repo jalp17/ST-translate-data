@@ -16,7 +16,7 @@
         <div class="form-grid three-cols">
           <div>
             <label for="sourceLang">Idioma origen</label>
-            <select id="sourceLang" class="text_pole">
+            <select id="sourceLang" data-key="sourceLang" class="text_pole">
               <option value="auto">Detectar automáticamente</option>
               <option value="en">Inglés</option>
               <option value="es" selected>Español</option>
@@ -32,7 +32,7 @@
 
           <div>
             <label for="targetLang">Idioma destino</label>
-            <select id="targetLang" class="text_pole">
+            <select id="targetLang" data-key="targetLang" class="text_pole">
               <option value="es" selected>Español</option>
               <option value="en">Inglés</option>
               <option value="pt">Portugués</option>
@@ -47,7 +47,7 @@
 
           <div>
             <label for="providerSelect">Proveedor</label>
-            <select id="providerSelect" class="text_pole">
+            <select id="providerSelect" data-key="providerSelect" class="text_pole">
               <option value="openai" selected>OpenAI</option>
               <option value="local_koboldcpp">KoboldCPP</option>
               <option value="llama_cpp">llama.cpp</option>
@@ -64,7 +64,7 @@
         <div class="form-grid" style="margin-top: 0.9rem;">
           <div>
             <label for="modelInput">Modelo</label>
-            <input id="modelInput" class="text_pole" type="text" placeholder="Ej: gpt-3.5-turbo, gpt-4, llama2" list="modelSuggestions" />
+            <input id="modelInput" data-key="modelInput" class="text_pole" type="text" placeholder="Ej: gpt-3.5-turbo, gpt-4, llama2" list="modelSuggestions" />
             <datalist id="modelSuggestions">
               <option value="gpt-3.5-turbo"></option>
               <option value="gpt-4"></option>
@@ -78,7 +78,7 @@
 
           <div>
             <label for="apiUrl">Endpoint URL</label>
-            <input id="apiUrl" class="text_pole" type="text" placeholder="https://api.openai.com/v1/chat/completions" />
+            <input id="apiUrl" data-key="apiUrl" class="text_pole" type="text" placeholder="https://api.openai.com/v1/chat/completions" />
             <div id="providerStatusText" class="hint-text">Se usará el endpoint predeterminado del proveedor.</div>
           </div>
         </div>
@@ -100,7 +100,7 @@
         <div class="form-grid">
           <div class="full-width">
             <label for="connectionModeSelect">Modo de configuración</label>
-            <select id="connectionModeSelect" class="text_pole">
+            <select id="connectionModeSelect" data-key="connectionModeSelect" class="text_pole">
               <option value="manual" selected>Configuración manual</option>
               <option value="saved_profile">Usar perfil guardado</option>
               <option value="st_global">Usar configuración ST global</option>
@@ -110,7 +110,7 @@
           <div class="full-width">
             <label for="apiKey">API key</label>
             <div class="input-with-button">
-              <input id="apiKey" class="text_pole" type="text" placeholder="Clave de API (opcional según proveedor)" />
+              <input id="apiKey" data-key="apiKey" class="text_pole" type="text" placeholder="Clave de API (opcional según proveedor)" />
               <button id="apiKeyLoadButton" type="button" class="menu_button">Cargar desde perfil</button>
             </div>
           </div>
@@ -118,7 +118,7 @@
           <div class="full-width">
             <label for="apiKeyProfileSelect">Perfil de conexión guardado</label>
             <div class="input-with-button">
-              <select id="apiKeyProfileSelect" class="text_pole">
+              <select id="apiKeyProfileSelect" data-key="apiKeyProfileSelect" class="text_pole">
                 <option value="">Seleccione un perfil</option>
               </select>
               <button id="refreshProfilesButton" type="button" class="menu_button">Refrescar</button>
@@ -127,14 +127,14 @@
 
           <div class="full-width checkbox-group">
             <label class="checkbox-label">
-              <input id="useProfileProvider" type="checkbox" />
+              <input id="useProfileProvider" data-key="useProfileProvider" type="checkbox" />
               Usar proveedor y endpoint del perfil
             </label>
           </div>
 
           <div class="full-width">
             <label for="batchDelay">Delay entre envíos (ms)</label>
-            <input id="batchDelay" class="text_pole" type="number" min="0" step="50" value="500" />
+            <input id="batchDelay" data-key="batchDelay" class="text_pole" type="number" min="0" step="50" value="500" />
           </div>
         </div>
         <div class="hint-text">
@@ -175,7 +175,7 @@
 
           <div class="full-width">
             <label for="outputFolder">Carpeta de salida (imágenes)</label>
-            <input id="outputFolder" class="text_pole" type="text" placeholder="ruta/de/salida/o/nombre-de-carpeta" />
+            <input id="outputFolder" data-key="outputFolder" class="text_pole" type="text" placeholder="ruta/de/salida/o/nombre-de-carpeta" />
           </div>
         </div>
         <div class="button-row">

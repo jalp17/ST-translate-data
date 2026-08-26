@@ -3,6 +3,7 @@ import * as providers from './translateProviders.js';
 import * as png from './png.js';
 import * as characters from './characters.js';
 import * as ui from './ui.js';
+import * as settings from './ui/settings.js';
 
 export async function initializeTranslator() {
   const translator = {
@@ -23,7 +24,7 @@ export async function initializeTranslator() {
   };
 
   window.STUniversalTranslator = translator;
-  window.STTranslatorModules = { utils, providers, png, characters, ui };
+  window.STTranslatorModules = { utils, providers, png, characters, ui, settings };
   return translator;
 }
 

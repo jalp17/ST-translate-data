@@ -61,7 +61,10 @@ export async function fetchJson(url, init = {}, timeoutMs = 30000) {
       throw new Error(`Timeout al llamar a ${url} después de ${timeoutMs}ms. Verifica la conectividad o aumenta el tiempo de espera.`);
     }
     console.error(`fetchJson network error calling ${url}:`, error);
-    throw new Error(`Error de red al llamar a ${url}: ${error.message}. Verifica el endpoint, la conectividad y posibles restricciones CORS.`);
+    const corsMessage = error instanceof TypeError && /fetch|NetworkError|CORS|cross-origin/i.test(error.message)
+      ? ' Error de CORS: el endpoint bloquea solicitudes desde el navegador. Considera usar el proxy backend de SillyTavern (generar a través de ST) o un servidor con CORS habilitado.'
+      : '';
+    throw new Error(`Error de red al llamar a ${url}: ${error.message}.${corsMessage}`);
   }
 
   clearTimeout(timeoutId);

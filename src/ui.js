@@ -65,14 +65,30 @@ export async function initializeExtensionPanel() {
     return true;
   };
 
-  const init = async () => {
-    const ready = await tryRenderSettings();
-    if (!ready) {
-      setTimeout(init, 1000);
-    }
-  };
-
-  init();
+  const context = globalThis.SillyTavern?.getContext?.();
+  if (context?.eventSource && context?.event_types) {
+    let rendered = false;
+    const onAppReady = async () => {
+      if (rendered) return;
+      const success = await tryRenderSettings();
+      if (success) {
+        rendered = true;
+        context.eventSource.off(context.event_types.APP_READY, onAppReady);
+      } else {
+        setTimeout(onAppReady, 1000);
+      }
+    };
+    context.eventSource.on(context.event_types.APP_READY, onAppReady);
+    onAppReady();
+  } else {
+    const poll = async () => {
+      const ready = await tryRenderSettings();
+      if (!ready) {
+        setTimeout(poll, 1000);
+      }
+    };
+    poll();
+  }
 }
 
 export function attachTranslatorSettingsEvents() {

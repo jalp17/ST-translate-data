@@ -21,7 +21,7 @@ export async function initializeExtensionPanel() {
     }
 
     try {
-      const currentScript = document.currentScript || document.querySelector('script[src*="script.js"]');
+      const currentScript = document.currentScript || document.querySelector('script[type="module"][src*="/dist/script.js"]') || document.querySelector('script[src*="script.js"]');
       const scriptSrc = currentScript?.src;
       const extensionNameMatch = scriptSrc ? scriptSrc.match(/\/scripts\/extensions\/(.+?)\/dist\/script\.js$/) : null;
       const extensionName = extensionNameMatch ? extensionNameMatch[1] : null;
@@ -73,7 +73,7 @@ export async function initializeExtensionPanel() {
       const success = await tryRenderSettings();
       if (success) {
         rendered = true;
-        context.eventSource.off(context.event_types.APP_READY, onAppReady);
+        context.eventSource?.off?.(context.event_types.APP_READY, onAppReady);
       } else {
         setTimeout(onAppReady, 1000);
       }

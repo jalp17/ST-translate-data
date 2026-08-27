@@ -342,12 +342,13 @@
 
 .sttd-form-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 1rem;
+  overflow-wrap: break-word;
 }
 
 .sttd-form-grid.three-cols {
-  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 }
 
 .sttd-form-grid.full-width {

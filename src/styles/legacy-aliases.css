@@ -5,23 +5,33 @@
    ============================================================================ */
 
 .sttd-translator-panel {
-  all: unset;
   display: block;
   width: 100%;
-  max-width: 820px;
+  max-width: 100%;
+  box-sizing: border-box;
   background: var(--panel-background, rgba(30, 30, 30, 0.95));
-  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
   border-radius: 0.75rem;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03);
   color: var(--text-color, #e6e6e6);
   overflow: hidden;
+  margin: 0.5rem 0;
+}
+
+.sttd-translator-panel *,
+.sttd-translator-panel *::before,
+.sttd-translator-panel *::after {
+  box-sizing: border-box;
 }
 
 .sttd-translator-panel .sttd-inline-drawer-toggle {
   cursor: pointer;
   padding: 0.85rem 1rem;
-  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-bottom: 1px solid var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.08));
   background: var(--panel-background-alt, rgba(20, 20, 20, 0.95));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .sttd-translator-panel .sttd-inline-drawer-toggle b {
@@ -39,6 +49,7 @@
   border-radius: 0.85rem;
   padding: 1rem;
   background: rgba(255, 255, 255, 0.03);
+  min-width: 0;
 }
 
 .sttd-translator-panel .sttd-section-title {
@@ -51,14 +62,16 @@
   gap: 0.5rem;
 }
 
+/* Form grids: responsive — 1 col by default (panel is narrow), 2+ on wide screens */
 .sttd-translator-panel .sttd-form-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  grid-template-columns: 1fr;
   gap: 0.9rem;
+  min-width: 0;
 }
 
 .sttd-translator-panel .sttd-form-grid.sttd-three-cols {
-  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .sttd-translator-panel .sttd-form-grid.sttd-full-width {
@@ -67,6 +80,15 @@
 
 .sttd-translator-panel .sttd-full-width {
   grid-column: 1 / -1;
+}
+
+@media (min-width: 700px) {
+  .sttd-translator-panel .sttd-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sttd-translator-panel .sttd-form-grid.sttd-three-cols {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .sttd-translator-panel .sttd-section-card + .sttd-section-card {
@@ -101,40 +123,51 @@
 
 .sttd-status-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  grid-template-columns: 1fr;
   gap: 0.9rem;
 }
 
 .sttd-status-item {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
+  gap: 0.5rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  min-width: 0;
 }
 
 .sttd-status-label {
   font-weight: 500;
   opacity: 0.8;
   font-size: 0.9rem;
+  flex-shrink: 0;
 }
 
 .sttd-status-value {
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  text-align: right;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .sttd-input-with-button {
   display: flex;
   gap: 0.5rem;
+  min-width: 0;
 }
 
 .sttd-input-with-button .sttd-input {
   flex: 1;
+  min-width: 0;
 }
 
-.sttd-input {
+.sttd-input,
+.sttd-translator-panel select.sttd-input {
   width: 100%;
+  max-width: 100%;
   padding: 0.6rem 0.8rem;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -142,6 +175,18 @@
   color: inherit;
   font: inherit;
   box-sizing: border-box;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.sttd-translator-panel select.sttd-input option {
+  background: var(--SmartThemeBlurTintColor, #1e1e1e);
+  color: inherit;
+}
+
+.sttd-translator-panel textarea.sttd-input,
+.sttd-translator-panel select.sttd-input[multiple] {
+  text-overflow: unset;
 }
 
 .sttd-checkbox-group {
@@ -154,6 +199,8 @@
   font-size: 0.8rem;
   opacity: 0.7;
   margin-top: 0.25rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .sttd-flex-container {
@@ -170,11 +217,55 @@
 
 .sttd-down {
   transition: transform 0.3s ease;
+  flex-shrink: 0;
 }
 
 .inline-drawer.expanded .sttd-down {
   transform: rotate(180deg);
 }
 
-/* Additional classes not in legacy-aliases.css but needed */
-.sttd-section-card + .sttd-section-card { margin-top: 0.5rem; }
+/* Button rows wrap on narrow panel */
+.sttd-translator-panel .button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.sttd-translator-panel .button-row .sttd-button {
+  flex: 1 1 180px;
+  width: auto;
+}
+
+/* Drop zone must not overflow */
+.sttd-translator-panel .sttd-drop-zone {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Character row: select + stacked action buttons */
+.sttd-character-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.9rem;
+  align-items: start;
+}
+
+@media (max-width: 520px) {
+  .sttd-character-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Global action buttons group */
+.sttd-translator-panel .global-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.sttd-translator-panel .global-actions .sttd-button {
+  flex: 1 1 180px;
+  width: auto;
+}

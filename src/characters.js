@@ -1,5 +1,6 @@
 import { preserveVariables, restoreVariables, sleep } from './utils.js';
 import { translateText } from './translateProviders.js';
+import { getSTContext } from './stContext.js';
 
 const CHARACTER_TRANSLATION_KEYS = new Set([
   'name',
@@ -94,106 +95,53 @@ export async function translateCharacters(characters, sourceLang = 'auto', targe
   return translateCharacterData(characters, sourceLang, targetLang, providerConfig);
 }
 
-function isCharacterLike(item) {
-  if (!item || typeof item !== 'object') {
-    return false;
-  }
+// ---------------------------------------------------------------------------
+// API oficial de SillyTavern — Personajes
+// ---------------------------------------------------------------------------
 
-  const hasName = Boolean(item.name || item.title || item.characterName || item.id || item.uuid);
-  const hasCharacterField = Object.keys(item).some((key) => /name|description|personality|scenario|bio|note|comment|profile/i.test(key));
-  return hasName && hasCharacterField;
-}
-
-export function normalizeCharacterSource(source) {
-  if (!source) {
+/**
+ * Devuelve todos los personajes registrados en SillyTavern (API oficial).
+ * Usa `getCharacters()` para garantizar que incluso los personajes no
+ * cargados en sesión aparezcan en la lista.
+ *
+ * @returns {Promise<Array<{id: string, name: string, data: object}>>}
+ */
+export async function getAvailableCharacters() {
+  let ctx;
+  try {
+    ctx = getSTContext();
+  } catch (err) {
+    console.warn('ST Translator: contexto ST no disponible aún, usando fallback cacheado', err?.message);
     return [];
   }
-  if (Array.isArray(source)) {
-    return source;
+
+  // Forzar la lista completa (incluye personajes no cargados en la sesión actual)
+  let rawList = [];
+  try {
+    if (typeof ctx.getCharacters === 'function') {
+      rawList = await ctx.getCharacters();
+    } else if (Array.isArray(ctx.characters)) {
+      rawList = ctx.characters;
+    }
+  } catch (err) {
+    console.warn('ST Translator: getCharacters() falló, usando ctx.characters como fallback', err);
+    rawList = Array.isArray(ctx.characters) ? ctx.characters : [];
   }
-  if (typeof source === 'object') {
-    if (Array.isArray(source.items)) {
-      return source.items;
-    }
-    if (Array.isArray(source.results)) {
-      return source.results;
-    }
-    if (Array.isArray(source.data)) {
-      return source.data;
-    }
-    return Object.values(source);
-  }
-  return [];
+
+  return rawList
+    .filter((c) => c && (c.name || c.avatar))
+    .map((c) => ({
+      id: c.avatar ?? c.name,   // id estable: nombre de fichero PNG
+      name: c.name ?? c.avatar ?? 'Desconocido',
+      data: c,
+    }));
 }
 
-function scanWindowForCharacters() {
-  const candidates = [];
-  const keys = Object.keys(window).filter((key) => /character|persona|actor|npc/i.test(key));
-  for (const key of keys) {
-    candidates.push(...normalizeCharacterSource(window[key]));
-  }
-
-  if (window.SillyTavern && typeof window.SillyTavern === 'object') {
-    const stKeys = Object.keys(window.SillyTavern).filter((key) => /character|persona|actor|npc|context/i.test(key));
-    for (const key of stKeys) {
-      candidates.push(...normalizeCharacterSource(window.SillyTavern[key]));
-    }
-  }
-
-  if (window.ST && typeof window.ST === 'object') {
-    const stKeys = Object.keys(window.ST).filter((key) => /character|persona|actor|npc|context/i.test(key));
-    for (const key of stKeys) {
-      candidates.push(...normalizeCharacterSource(window.ST[key]));
-    }
-  }
-
-  return candidates;
-}
-
-export function getAvailableCharacters() {
-  const sources = [
-    window.getCurrentCharacters?.(),
-    window.getCurrentCharacter?.(),
-    window.getCharacters?.(),
-    window.SillyTavern?.getContext?.()?.characters,
-    window.SillyTavern?.characters,
-    window.SillyTavern?.currentCharacters,
-    window.ST?.characters,
-    window.ST?.currentCharacters,
-    window.characters,
-    window.currentCharacters,
-    window.characterList,
-    window.allCharacters,
-  ];
-
-  const allItems = [];
-  for (const source of sources) {
-    allItems.push(...normalizeCharacterSource(source));
-  }
-
-  if (!allItems.length) {
-    allItems.push(...scanWindowForCharacters());
-  }
-
-  const visibleItems = allItems.filter(isCharacterLike);
-  const uniqueById = new Map();
-
-  visibleItems.forEach((item, index) => {
-    const id = item?.id ?? item?.uuid ?? `${item?.name ?? 'char'}-${index}`;
-    if (!uniqueById.has(id)) {
-      uniqueById.set(id, item);
-    }
-  });
-
-  return Array.from(uniqueById.values()).map((item, index) => ({
-    id: item?.id ?? item?.uuid ?? `char-${index}`,
-    name: item?.name ?? item?.characterName ?? item?.title ?? `Personaje ${index + 1}`,
-    data: item,
-  }));
-}
-
-export function searchCharacters(query) {
-  const all = getAvailableCharacters();
+/**
+ * Búsqueda de personajes (client-side filter sobre la lista oficial).
+ */
+export async function searchCharacters(query) {
+  const all = await getAvailableCharacters();
   if (!query || typeof query !== 'string') {
     return all;
   }
@@ -201,56 +149,101 @@ export function searchCharacters(query) {
   return all.filter((item) => item.name.toLowerCase().includes(term));
 }
 
-export function getAvailableLorebooks() {
-  const candidates = [
-    window.getCurrentLorebook?.(),
-    window.SillyTavern?.getCurrentLorebook?.(),
-    window.SillyTavern?.getContext?.()?.lorebook,
-    window.SillyTavern?.lorebook,
-    window.ST?.lorebook,
-    window.lorebook,
-    window.worldInfo,
-    window.SillyTavern?.worldInfo,
-  ];
+// ---------------------------------------------------------------------------
+// API oficial de SillyTavern — Lorebooks
+// ---------------------------------------------------------------------------
 
-  const found = [];
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    if (Array.isArray(candidate)) {
-      found.push(...candidate);
-    } else if (typeof candidate === 'object') {
-      found.push(candidate);
-    }
+/**
+ * Devuelve la lista de lorebooks instalados (nombre = id para ST).
+ * Usa `getWorldInfoNames()` que expone los nombres de fichero sin extensión.
+ *
+ * @returns {Promise<Array<{id: string, name: string, data: null}>>}
+ */
+export async function getAvailableLorebooks() {
+  let ctx;
+  try {
+    ctx = getSTContext();
+  } catch (err) {
+    console.warn('ST Translator: contexto ST no disponible aún, lorebooks vacíos', err?.message);
+    return [];
   }
 
-  return found.map((item, index) => ({
-    id: item?.id ?? item?.uuid ?? `lorebook-${index}`,
-    name: item?.name ?? item?.title ?? `Lorebook ${index + 1}`,
-    data: item,
+  if (typeof ctx.getWorldInfoNames !== 'function') {
+    console.warn('ST Translator: getWorldInfoNames no está disponible en el contexto ST');
+    return [];
+  }
+
+  const names = ctx.getWorldInfoNames();
+  return names.map((name) => ({
+    id: name,
+    name,
+    data: null, // se carga bajo demanda con loadLorebookById
   }));
 }
 
-export async function translateLorebook(lorebook, sourceLang = 'auto', targetLang = 'es', batchDelay = 500, providerConfig = { provider: 'openai' }) {
-  if (!lorebook?.world_info?.entries) {
-    return lorebook;
+/**
+ * Carga el contenido completo de un lorebook por su nombre.
+ * La API real de ST devuelve `{ entries: { uid: entry } }` (objeto, no array).
+ *
+ * @param {string} name - Nombre del lorebook (sin extensión)
+ * @returns {Promise<{name: string, entries: Array}|null>}
+ */
+export async function loadLorebookById(name) {
+  const ctx = getSTContext();
+  const data = await ctx.loadWorldInfo(name);
+  if (!data?.entries) {
+    return null;
+  }
+  return {
+    name,
+    entries: Object.values(data.entries),
+  };
+}
+
+/**
+ * Traduce un lorebook completo (entries).
+ * Acepta tanto `{ entries: Array }` como `{ entries: { uid: entry } }`.
+ *
+ * @param {object} book - Lorebook con clave `entries`
+ * @param {string} sourceLang
+ * @param {string} targetLang
+ * @param {number} batchDelay
+ * @param {object} providerConfig
+ * @returns {Promise<object>} Lorebook traducido (entries como array)
+ */
+export async function translateLorebook(book, sourceLang = 'auto', targetLang = 'es', batchDelay = 500, providerConfig = { provider: 'openai' }) {
+  if (!book) {
+    return book;
   }
 
-  const translated = { ...lorebook };
-  translated.world_info = { ...translated.world_info };
-  translated.world_info.entries = [];
+  const entries = Array.isArray(book.entries)
+    ? book.entries
+    : Object.values(book.entries ?? {});
 
-  for (const entry of lorebook.world_info.entries) {
+  const outEntries = [];
+  for (const entry of entries) {
     const copy = { ...entry };
     for (const field of ['content', 'key', 'comment']) {
-      if (typeof copy[field] === 'string') {
-        const { text: protectedText, tokenMap } = preserveVariables(copy[field]);
-        const translatedText = await translateText(protectedText, sourceLang, targetLang, providerConfig);
-        copy[field] = restoreVariables(translatedText, tokenMap);
+      const value = copy[field];
+      const strings = Array.isArray(value)
+        ? value
+        : (typeof value === 'string' ? [value] : null);
+
+      if (!strings) {
+        continue;
       }
+
+      const translated = [];
+      for (const s of strings) {
+        const { text: protectedText, tokenMap } = preserveVariables(s);
+        const translatedText = await translateText(protectedText, sourceLang, targetLang, providerConfig);
+        translated.push(restoreVariables(translatedText, tokenMap));
+      }
+      copy[field] = Array.isArray(value) ? translated : translated[0];
     }
-    translated.world_info.entries.push(copy);
+    outEntries.push(copy);
     await sleep(batchDelay);
   }
 
-  return translated;
+  return { ...book, entries: outEntries };
 }

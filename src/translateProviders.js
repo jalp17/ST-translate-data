@@ -306,3 +306,123 @@ async function translateWithGoogleTranslate(text, sourceLang, targetLang, provid
     throw new Error(`Error con Google Translate: ${error.message}`);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Model fetching per provider
+// ---------------------------------------------------------------------------
+
+const MODEL_CACHE_KEY = 'stTranslateModelCache';
+const MODEL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const PROVIDER_MODEL_ENDPOINTS = {
+  openai: {
+    url: (apiUrl) => apiUrl?.replace(/\/chat\/completions$/, '/models') ?? 'https://api.openai.com/v1/models',
+    map: (data) => (data?.data ?? []).map((m) => m.id),
+  },
+  openrouter: {
+    url: () => 'https://openrouter.ai/api/v1/models',
+    map: (data) => (data?.data ?? []).map((m) => m.id),
+  },
+  ollama: {
+    url: (apiUrl) => `${(apiUrl || DEFAULT_ENDPOINTS.ollama).replace(/\/api\/.*/, '')}/api/tags`,
+    map: (data) => (data?.models ?? []).map((m) => m.name),
+  },
+  local_koboldcpp: {
+    url: (apiUrl) => `${(apiUrl || DEFAULT_ENDPOINTS.local_koboldcpp).replace(/\/api\/v1\/generate$/, '')}/v1/models`,
+    map: (data) => (data?.data ?? []).map((m) => m.id),
+  },
+  llama_cpp: {
+    url: (apiUrl) => `${(apiUrl || DEFAULT_ENDPOINTS.llama_cpp).replace(/\/v1\/completions$/, '')}/v1/models`,
+    map: (data) => (data?.data ?? []).map((m) => m.id),
+  },
+  llm_studio: {
+    url: (apiUrl) => `${(apiUrl || DEFAULT_ENDPOINTS.llm_studio).replace(/\/api\/v1\/generate$/, '')}/v1/models`,
+    map: (data) => (data?.data ?? []).map((m) => m.id),
+  },
+  google_aistudio: {
+    url: (apiUrl, apiKey) => `https://generativelanguage.googleapis.com/v1beta/models${apiKey ? `?key=${encodeURIComponent(apiKey)}` : ''}`,
+    map: (data) => (data?.models ?? []).map((m) => m.name),
+  },
+  google_translate: null,   // no tiene lista de modelos pública accesible
+  electron_hub: null,       // modelo genérico, sin endpoint de modelos
+};
+
+/**
+ * Obtiene la lista de modelos disponible para el proveedor indicado.
+ * Lee la cache de extensionSettings; si está fresca (< 5 min) la devuelve.
+ * En caso contrario hace fetch al endpoint del proveedor.
+ *
+ * @param {string} provider - Valor de `SUPPORTED_TRANSLATION_PROVIDERS`
+ * @param {{ apiKey?: string, apiUrl?: string }} opts
+ * @returns {Promise<string[]>}
+ */
+export async function getModelsForProvider(provider, { apiKey, apiUrl } = {}) {
+  const cached = readModelsCache(provider);
+  if (cached) {
+    return cached;
+  }
+
+  const endpoint = PROVIDER_MODEL_ENDPOINTS[provider];
+  if (!endpoint) {
+    // Proveedor sin endpoint de modelos → lista vacía, el usuario escribe a mano
+    return [];
+  }
+
+  const url = endpoint.url(apiUrl, apiKey);
+  let models = [];
+
+  try {
+    const headers = endpoint.buildHeaders
+      ? endpoint.buildHeaders(apiKey)
+      : (provider === 'openai' || provider === 'openrouter' || provider === 'local_koboldcpp' || provider === 'llama_cpp' || provider === 'llm_studio')
+        ? buildJsonHeaders(apiKey)
+        : {};
+
+    const data = await fetchJson(url, { headers });
+    models = endpoint.map(data) ?? [];
+  } catch (err) {
+    console.warn(`getModelsForProvider: ${provider} error fetching models`, err);
+    models = [];
+  }
+
+  writeModelsCache(provider, models);
+  return models;
+}
+
+function readModelsCache(provider) {
+  try {
+    const ctx = globalThis.SillyTavern?.getContext?.();
+    const cache = ctx?.extensionSettings?.stTranslate?.[MODEL_CACHE_KEY] ?? {};
+    const entry = cache[provider];
+    if (!entry || !Array.isArray(entry.models) || !entry.models.length) {
+      return null;
+    }
+    if (Date.now() - entry.ts > MODEL_CACHE_TTL) {
+      return null;
+    }
+    console.debug(`getModelsForProvider: ${provider} using cached models (${entry.models.length})`);
+    return entry.models;
+  } catch {
+    return null;
+  }
+}
+
+function writeModelsCache(provider, models) {
+  try {
+    const ctx = globalThis.SillyTavern?.getContext?.();
+    if (!ctx?.extensionSettings) return;
+    if (!ctx.extensionSettings.stTranslate) {
+      ctx.extensionSettings.stTranslate = {};
+    }
+    if (!ctx.extensionSettings.stTranslate[MODEL_CACHE_KEY]) {
+      ctx.extensionSettings.stTranslate[MODEL_CACHE_KEY] = {};
+    }
+    ctx.extensionSettings.stTranslate[MODEL_CACHE_KEY][provider] = {
+      ts: Date.now(),
+      models,
+    };
+    ctx.saveSettingsDebounced?.();
+  } catch {
+    // ignorar fallo de escritura de cache
+  }
+}

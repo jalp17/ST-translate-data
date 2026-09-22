@@ -1,4 +1,4 @@
-import { DEFAULT_ENDPOINTS } from './translateProviders.js';
+import { DEFAULT_ENDPOINTS, getModelsForProvider } from './translateProviders.js';
 import { populateForm, bindAutoSave } from './ui/settings.js';
 
 export { populateForm, bindAutoSave } from './ui/settings.js';
@@ -96,20 +96,16 @@ export function attachTranslatorSettingsEvents() {
     return;
   }
 
-  const pngInput = document.getElementById('pngInput');
-  const pngDropZone = document.getElementById('pngDropZone');
-  const selectedFileName = document.getElementById('selectedFileName');
+  const pngBatchInput = document.getElementById('pngBatchInput');
+  const pngBatchDropZone = document.getElementById('pngBatchDropZone');
+  const selectedBatchCount = document.getElementById('selectedBatchCount');
   const translatePngButton = document.getElementById('translatePngButton');
-  const translateImageBatchButton = document.getElementById('translateImageBatchButton');
   const translateLorebookButton = document.getElementById('translateLorebookButton');
   const translateSelectedCharactersButton = document.getElementById('translateSelectedCharactersButton');
   const refreshCharacterListButton = document.getElementById('refreshCharacterListButton');
   const selectAllCharactersButton = document.getElementById('selectAllCharactersButton');
   const clearCharacterSelectionButton = document.getElementById('clearCharacterSelectionButton');
   const characterSearch = document.getElementById('characterSearch');
-  const pngBatchInput = document.getElementById('pngBatchInput');
-  const pngBatchDropZone = document.getElementById('pngBatchDropZone');
-  const selectedBatchCount = document.getElementById('selectedBatchCount');
   const outputFolderInput = document.getElementById('outputFolder');
   const characterBatchSelect = document.getElementById('characterBatchSelect');
   const sourceLangSelect = document.getElementById('sourceLang');
@@ -134,7 +130,7 @@ export function attachTranslatorSettingsEvents() {
   const refreshLorebookListButton = document.getElementById('refreshLorebookListButton');
   const lorebookStatusText = document.getElementById('lorebookStatusText');
 
-  if (!pngInput || !translatePngButton || !translateImageBatchButton || !translateLorebookButton || !translateSelectedCharactersButton || !refreshCharacterListButton || !characterBatchSelect || !sourceLangSelect || !targetLangSelect || !providerSelect || !modelInput || !apiUrlInput || !apiKeyInput || !apiKeyLoadButton || !refreshProfilesButton || !connectionModeSelect || !useProfileProviderCheckbox || !apiKeyProfileSelect || !statusDetailsText || !progressBar || !statusText || !batchDelayInput || !lorebookSelect || !refreshLorebookListButton) {
+  if (!pngBatchInput || !pngBatchDropZone || !translatePngButton || !translateLorebookButton || !translateSelectedCharactersButton || !refreshCharacterListButton || !characterBatchSelect || !sourceLangSelect || !targetLangSelect || !providerSelect || !modelInput || !apiUrlInput || !apiKeyInput || !apiKeyLoadButton || !refreshProfilesButton || !connectionModeSelect || !useProfileProviderCheckbox || !apiKeyProfileSelect || !statusDetailsText || !progressBar || !statusText || !batchDelayInput || !lorebookSelect || !refreshLorebookListButton) {
     return;
   }
 
@@ -142,16 +138,16 @@ export function attachTranslatorSettingsEvents() {
   console.debug('ST Translator: attaching settings events');
 
   let savedConnectionProfiles = [];
-  const MODEL_SUGGESTIONS = {
-    openai: ['gpt-3.5-turbo', 'gpt-4', 'gpt-4o', 'gpt-3.5-turbo-0613', 'gpt-4-0613'],
-    local_koboldcpp: ['llama', 'llama2', 'mistral', 'kobold-70b'],
-    llama_cpp: ['llama', 'llama2', 'meta-llama/Llama-2-7b-chat', 'llama-3'],
-    ollama: ['llama2', 'mistral', 'gpt-4o', 'gpt-4'],
-    llm_studio: ['text-davinci-003', 'gpt-4', 'gpt-4o'],
-    openrouter: ['gpt-4', 'gpt-3.5-turbo', 'gpt-4o'],
-    electron_hub: ['default'],
-    google_aistudio: ['models/text-bison-001', 'models/chat-bison-001'],
+  const FALLBACK_MODELS = {
+    openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo'],
+    openrouter: [],
+    local_koboldcpp: [],
+    llama_cpp: [],
+    ollama: [],
+    llm_studio: [],
+    google_aistudio: ['gemini-1.5-flash', 'gemini-1.5-pro'],
     google_translate: [],
+    electron_hub: ['default'],
   };
 
   function normalizeProviderKey(value) {
@@ -213,14 +209,38 @@ export function attachTranslatorSettingsEvents() {
     statusElement.textContent = `Endpoint configurado para ${provider}.`;
   }
 
-  function updateModelSuggestionList(provider) {
-    console.debug('ST Translator: updating model suggestions for provider', provider);
-    const suggestions = MODEL_SUGGESTIONS[provider] || [];
+  let modelFetchTimer = null;
+
+  async function updateModelSuggestionList(provider) {
+    console.debug('ST Translator: updating model list for provider', provider);
     const listElement = document.getElementById('modelSuggestions');
     const selectElement = document.getElementById('modelSelect');
+    if (selectElement) {
+      selectElement.innerHTML = '';
+      const loadingOption = document.createElement('option');
+      loadingOption.value = '';
+      loadingOption.textContent = 'Cargando modelos…';
+      selectElement.appendChild(loadingOption);
+      selectElement.disabled = true;
+    }
+
+    let models = [];
+    try {
+      models = await getModelsForProvider(provider, {
+        apiKey: apiKeyInput.value.trim() || undefined,
+        apiUrl: apiUrlInput.value.trim() || undefined,
+      });
+    } catch (err) {
+      console.warn('ST Translator: error obteniendo modelos del proveedor', err);
+    }
+
+    if (!models.length) {
+      models = FALLBACK_MODELS[provider] ?? [];
+    }
+
     if (listElement) {
       listElement.innerHTML = '';
-      suggestions.forEach((model) => {
+      models.forEach((model) => {
         const option = document.createElement('option');
         option.value = model;
         listElement.appendChild(option);
@@ -231,20 +251,27 @@ export function attachTranslatorSettingsEvents() {
       selectElement.innerHTML = '';
       const defaultOption = document.createElement('option');
       defaultOption.value = '';
-      defaultOption.textContent = 'Selecciona un modelo...';
+      defaultOption.textContent = models.length ? 'Selecciona un modelo...' : 'Escribe el modelo manualmente';
       selectElement.appendChild(defaultOption);
-      suggestions.forEach((model) => {
+      models.forEach((model) => {
         const option = document.createElement('option');
         option.value = model;
         option.textContent = model;
         selectElement.appendChild(option);
       });
-      selectElement.disabled = suggestions.length === 0;
+      selectElement.disabled = models.length === 0;
     }
 
     if (!modelInput.value.trim()) {
-      modelInput.placeholder = suggestions.length ? `Ej: ${suggestions[0]}` : 'Escriba el modelo';
+      modelInput.placeholder = models.length ? `Ej: ${models[0]}` : 'Escriba el modelo';
     }
+  }
+
+  function scheduleModelRefresh() {
+    clearTimeout(modelFetchTimer);
+    modelFetchTimer = setTimeout(() => {
+      updateModelSuggestionList(providerSelect.value);
+    }, 800);
   }
 
   function buildProviderConfig() {
@@ -355,7 +382,7 @@ export function attachTranslatorSettingsEvents() {
   }
 
   async function refreshCharacterList() {
-    const characters = window.STUniversalTranslator?.getAvailableCharacters?.() || [];
+    const characters = await window.STUniversalTranslator?.getAvailableCharacters?.() || [];
     setCharacterList(characters);
     statusText.textContent = characters.length
       ? `${characters.length} personajes disponibles` : 'No hay personajes disponibles';
@@ -475,7 +502,7 @@ export function attachTranslatorSettingsEvents() {
 
   async function updateLorebookList() {
     lorebookSelect.innerHTML = '';
-    const lorebooks = window.STUniversalTranslator?.getAvailableLorebooks?.() || [];
+    const lorebooks = await window.STUniversalTranslator?.getAvailableLorebooks?.() || [];
     if (!lorebooks.length) {
       const option = document.createElement('option');
       option.value = '';
@@ -804,7 +831,20 @@ export function attachTranslatorSettingsEvents() {
   apiUrlInput.addEventListener('input', () => {
     updateProviderStatusMessage();
     updateStatusDetails();
+    scheduleModelRefresh();
   });
+
+  apiKeyInput.addEventListener('input', () => {
+    updateApiKeyStatus();
+    scheduleModelRefresh();
+  });
+
+  if (refreshCharacterListButton) {
+    refreshCharacterListButton.addEventListener('click', () => {
+      statusText.textContent = 'Refrescando personajes...';
+      refreshCharacterList();
+    });
+  }
 
   updateApiSettingsForProvider(providerSelect.value);
   updateModelSuggestionList(providerSelect.value);
@@ -812,74 +852,54 @@ export function attachTranslatorSettingsEvents() {
   updateConnectionModeUI();
   updateStatusDetails();
 
-  let translatorSelectedFile = null;
+  let selectedFiles = [];
 
   findSavedApiKeyProfiles().then(populateApiKeyProfiles).catch(() => {
     populateApiKeyProfiles([]);
   });
-  pngInput.addEventListener('change', (event) => {
-    translatorSelectedFile = event.target.files?.[0] || null;
-    statusText.textContent = translatorSelectedFile ? `Archivo seleccionado: ${translatorSelectedFile.name}` : 'Listo';
-  });
 
   translatePngButton.addEventListener('click', async () => {
-    if (!translatorSelectedFile) {
-      statusText.textContent = 'Seleccione primero un PNG válido.';
+    if (!selectedFiles.length) {
+      statusText.textContent = 'Seleccione primero uno o varios PNG válidos.';
       return;
     }
 
-    updateProgress(10, 'Preparando traducción del PNG...');
+    updateProgress(10, 'Preparando traducción...');
 
     try {
       const providerConfig = validateProviderConfig(buildProviderConfig());
-      console.debug('ST Translator: starting PNG translation', providerConfig);
-      console.debug('Iniciando traducción de PNG con configuración:', providerConfig);
-      const translatedBlob = await window.STUniversalTranslator.translateCharacterCard(
-        translatorSelectedFile,
-        sourceLangSelect.value,
-        targetLangSelect.value,
-        providerConfig
-      );
 
-      updateProgress(100, 'Traducción completada. Descargando archivo.');
-      const url = URL.createObjectURL(translatedBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `translated-${translatorSelectedFile.name}`;
-      link.click();
-      URL.revokeObjectURL(url);
+      if (selectedFiles.length === 1) {
+        const file = selectedFiles[0];
+        console.debug('ST Translator: single PNG translation', file.name, providerConfig);
+        const translatedBlob = await window.STUniversalTranslator.translateCharacterCard(
+          file,
+          sourceLangSelect.value,
+          targetLangSelect.value,
+          providerConfig
+        );
+        const url = URL.createObjectURL(translatedBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `translated-${file.name}`;
+        link.click();
+        URL.revokeObjectURL(url);
+        updateProgress(100, 'Traducción completada. Archivo descargado.');
+      } else {
+        console.debug('ST Translator: batch PNG translation', selectedFiles.length, providerConfig);
+        const results = await window.STUniversalTranslator.translateImageBatch(
+          selectedFiles,
+          sourceLangSelect.value,
+          targetLangSelect.value,
+          outputFolderInput.value.trim(),
+          providerConfig,
+          Number(batchDelayInput.value || 500)
+        );
+        statusText.textContent = `Traducción de lote completada (${results.length} imágenes).`;
+        updateProgress(100);
+      }
     } catch (error) {
-      handleTranslationError(error, 'Error durante la traducción del PNG.');
-    }
-  });
-
-  translateImageBatchButton.addEventListener('click', async () => {
-    const files = Array.from(pngBatchInput.files || []);
-    if (!files.length) {
-      statusText.textContent = 'Seleccione al menos una imagen PNG para el lote.';
-      return;
-    }
-
-    updateProgress(10, 'Iniciando traducción de lote de imágenes...');
-
-    try {
-      const providerConfig = validateProviderConfig(buildProviderConfig());
-      console.debug('ST Translator: starting image batch translation', providerConfig);
-      console.debug('Iniciando traducción de lote de imágenes con configuración:', providerConfig);
-      const results = await window.STUniversalTranslator.translateImageBatch(
-        files,
-        sourceLangSelect.value,
-        targetLangSelect.value,
-        outputFolderInput.value.trim(),
-        providerConfig,
-        Number(batchDelayInput.value || 500)
-      );
-
-      statusText.textContent = `Traducción de lote completada (${results.length} imágenes).`;
-      console.debug('Image batch results:', results);
-      updateProgress(100);
-    } catch (error) {
-      handleTranslationError(error, 'Error durante la traducción de lote.');
+      handleTranslationError(error, 'Error durante la traducción de imágenes.');
     }
   });
 
@@ -892,29 +912,34 @@ export function attachTranslatorSettingsEvents() {
       return;
     }
 
-    const lorebooks = window.STUniversalTranslator?.getAvailableLorebooks?.() || [];
-    const selectedLorebook = lorebooks.find((item) => item.id === selectedLorebookId)?.data;
-
-    if (!selectedLorebook) {
-      statusText.textContent = 'No se encontró el lorebook seleccionado.';
-      updateProgress(0);
-      return;
-    }
-
     try {
       const providerConfig = validateProviderConfig(buildProviderConfig());
-      console.debug('ST Translator: starting lorebook translation', providerConfig);
-      console.debug('Iniciando traducción de lorebook con configuración:', providerConfig);
+      console.debug('ST Translator: loading lorebook', selectedLorebookId, providerConfig);
+
+      const book = await window.STUniversalTranslator.loadLorebookById(selectedLorebookId);
+      if (!book) {
+        statusText.textContent = 'No se pudo cargar el lorebook seleccionado.';
+        updateProgress(0);
+        return;
+      }
+
       const translatedLorebook = await window.STUniversalTranslator.translateLorebook(
-        selectedLorebook,
+        book,
         sourceLangSelect.value,
         targetLangSelect.value,
         Number(batchDelayInput.value || 500),
         providerConfig
       );
 
-      statusText.textContent = 'Lorebook traducido correctamente.';
-      console.debug('Translated lorebook:', translatedLorebook);
+      const blob = new Blob([JSON.stringify({ entries: translatedLorebook.entries }, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${selectedLorebookId}-translated.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      statusText.textContent = 'Lorebook traducido y descargado como JSON.';
       updateProgress(100);
     } catch (error) {
       handleTranslationError(error, 'Error durante la traducción del lorebook.');
@@ -931,7 +956,7 @@ export function attachTranslatorSettingsEvents() {
       return;
     }
 
-    const availableCharacters = window.STUniversalTranslator?.getAvailableCharacters?.() || [];
+    const availableCharacters = await window.STUniversalTranslator?.getAvailableCharacters?.() || [];
     const selectedItems = availableCharacters
       .filter((item) => selectedIds.includes(item.id))
       .map((item) => item.data);
@@ -945,7 +970,6 @@ export function attachTranslatorSettingsEvents() {
     try {
       const providerConfig = validateProviderConfig(buildProviderConfig());
       console.debug('ST Translator: starting character translation', providerConfig);
-      console.debug('Iniciando traducción de personajes con configuración:', providerConfig);
       const translatedCharacters = await window.STUniversalTranslator.translateCharacters(
         selectedItems,
         sourceLangSelect.value,
@@ -954,13 +978,19 @@ export function attachTranslatorSettingsEvents() {
         providerConfig
       );
 
-      if (window.setCurrentCharacters) {
-        window.setCurrentCharacters(translatedCharacters);
-      } else if (window.setCurrentCharacter) {
-        window.setCurrentCharacter(translatedCharacters);
-      }
+      // SillyTavern no expone setCurrentCharacter(s): descargar como JSON para importación manual
+      translatedCharacters.forEach((character, index) => {
+        const blob = new Blob([JSON.stringify(character, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const safeName = (character?.name ?? `character-${index}`).replace(/[/\\?%*:|"<>]/g, '_');
+        link.download = `translated-${safeName}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+      });
 
-      statusText.textContent = 'Personajes seleccionados traducidos correctamente.';
+      statusText.textContent = `${translatedCharacters.length} personaje(s) traducidos y descargados como JSON. Impórtalos desde SillyTavern.`;
       console.debug('Translated characters:', translatedCharacters);
       updateProgress(100);
     } catch (error) {
@@ -968,17 +998,10 @@ export function attachTranslatorSettingsEvents() {
     }
   });
 
-  setupDragAndDrop(pngDropZone, pngInput, (files) => {
-    const file = files[0];
-    if (file) {
-      selectedFileName.textContent = `Archivo: ${file.name}`;
-      statusText.textContent = `PNG seleccionado: ${file.name}`;
-    }
-  });
-
   setupDragAndDrop(pngBatchDropZone, pngBatchInput, (files) => {
-    selectedBatchCount.textContent = `${files.length} archivo(s) seleccionado(s)`;
-    statusText.textContent = files.length ? `Lote: ${files.length} imágenes` : 'Listo';
+    selectedFiles = files;
+    selectedBatchCount.textContent = files.length ? `${files.length} archivo(s) seleccionado(s)` : '';
+    statusText.textContent = files.length ? `Listo: ${files.length} imagen(es)` : 'Listo';
   });
 
   if (characterSearch) {
@@ -1014,10 +1037,6 @@ export function attachTranslatorSettingsEvents() {
         statusText.textContent = 'Error al refrescar lorebooks.';
       }
     });
-  }
-
-  if (apiKeyInput) {
-    apiKeyInput.addEventListener('input', updateApiKeyStatus);
   }
 
   if (typeof window.STUniversalTranslator?.getAvailableCharacters === 'function') {

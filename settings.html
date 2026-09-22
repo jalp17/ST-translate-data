@@ -154,20 +154,10 @@
         <div class="sttd-section-title"><i class="fa-solid fa-file-image"></i> Importar imágenes</div>
         <div class="sttd-form-grid">
           <div class="sttd-full-width">
-            <label>Tarjeta de personaje (PNG)</label>
-            <div id="pngDropZone" class="sttd-drop-zone">
-              <div class="sttd-drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
-              <div class="sttd-drop-text">Arrastra un PNG aquí o haz clic para seleccionar</div>
-              <input id="pngInput" type="file" accept="image/png" style="display: none;" />
-              <div id="selectedFileName" class="sttd-hint" style="margin-top: 0.5rem;"></div>
-            </div>
-          </div>
-
-          <div class="sttd-full-width">
-            <label>Lote de imágenes PNG</label>
+            <label for="pngBatchInput">Tarjetas de personaje (PNG)</label>
             <div id="pngBatchDropZone" class="sttd-drop-zone">
               <div class="sttd-drop-icon"><i class="fa-solid fa-images"></i></div>
-              <div class="sttd-drop-text">Arrastra múltiples PNG aquí o haz clic para seleccionar</div>
+              <div class="sttd-drop-text">Arrastra uno o varios PNG aquí o haz clic para seleccionar</div>
               <input id="pngBatchInput" type="file" accept="image/png" multiple style="display: none;" />
               <div id="selectedBatchCount" class="sttd-hint" style="margin-top: 0.5rem;"></div>
             </div>
@@ -180,10 +170,7 @@
         </div>
         <div class="button-row">
           <button id="translatePngButton" type="button" class="sttd-button primary">
-            <i class="fa-solid fa-image"></i> Traducir tarjeta PNG
-          </button>
-          <button id="translateImageBatchButton" type="button" class="sttd-button primary">
-            <i class="fa-solid fa-images"></i> Traducir lote de imágenes
+            <i class="fa-solid fa-language"></i> Traducir imágenes PNG
           </button>
         </div>
       </div>

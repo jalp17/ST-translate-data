@@ -14,6 +14,7 @@ export async function initializeTranslator() {
     getAvailableCharacters: characters.getAvailableCharacters,
     searchCharacters: characters.searchCharacters,
     getAvailableLorebooks: characters.getAvailableLorebooks,
+    loadLorebookById: characters.loadLorebookById,
     translateLorebook: characters.translateLorebook,
     translateText: providers.translateText,
     preserveVariables: utils.preserveVariables,

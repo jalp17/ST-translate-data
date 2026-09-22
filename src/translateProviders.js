@@ -7,6 +7,7 @@ import {
 } from './utils.js';
 
 export const DEFAULT_ENDPOINTS = {
+  st_backend: '(Usa la conexión activa de SillyTavern)',
   openai: 'https://api.openai.com/v1/chat/completions',
   local_koboldcpp: 'http://127.0.0.1:5000/api/v1/generate',
   llama_cpp: 'http://127.0.0.1:8080/v1/completions',
@@ -18,8 +19,9 @@ export const DEFAULT_ENDPOINTS = {
   google_translate: 'https://translation.googleapis.com/language/translate/v2',
 };
 
-export const DEFAULT_TRANSLATION_PROVIDER = 'openai';
+export const DEFAULT_TRANSLATION_PROVIDER = 'st_backend';
 export const SUPPORTED_TRANSLATION_PROVIDERS = [
+  'st_backend',
   'openai',
   'local_koboldcpp',
   'llama_cpp',
@@ -31,10 +33,30 @@ export const SUPPORTED_TRANSLATION_PROVIDERS = [
   'google_translate',
 ];
 
+/**
+ * Traduce usando el backend de SillyTavern (generateQuietPrompt).
+ * Usa la conexión/API key configurada en ST — las credenciales nunca salen del servidor.
+ * Esto arregla el problema de CORS y de API keys inaccesibles desde el navegador.
+ */
+export async function translateWithSTBackend(text, sourceLang, targetLang) {
+  const prompt = buildTranslatePrompt(text, sourceLang, targetLang);
+  const ctx = globalThis.SillyTavern?.getContext?.();
+  if (!ctx?.generateQuietPrompt) {
+    throw new Error('Backend de SillyTavern no disponible. Usa otro proveedor o recarga ST completamente.');
+  }
+  const result = await ctx.generateQuietPrompt({ quietPrompt: prompt });
+  if (typeof result !== 'string' || !result.trim()) {
+    throw new Error('ST backend devolvió una respuesta vacía.');
+  }
+  return result.trim();
+}
+
 export async function translateText(text, sourceLang, targetLang, providerConfig = { provider: DEFAULT_TRANSLATION_PROVIDER }) {
   const provider = providerConfig.provider || DEFAULT_TRANSLATION_PROVIDER;
 
   switch (provider) {
+    case 'st_backend':
+      return translateWithSTBackend(text, sourceLang, targetLang);
     case 'openai':
       return translateWithOpenAI(text, sourceLang, targetLang, providerConfig);
     case 'local_koboldcpp':
@@ -315,6 +337,7 @@ const MODEL_CACHE_KEY = 'stTranslateModelCache';
 const MODEL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const PROVIDER_MODEL_ENDPOINTS = {
+  st_backend: null,     // los modelos vienen del backend ST, no listable directo
   openai: {
     url: (apiUrl) => apiUrl?.replace(/\/chat\/completions$/, '/models') ?? 'https://api.openai.com/v1/models',
     map: (data) => (data?.data ?? []).map((m) => m.id),

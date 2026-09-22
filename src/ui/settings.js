@@ -5,13 +5,13 @@ export const MODULE_NAME = 'translate';
 export const DEFAULT_SETTINGS = {
   sourceLang: 'auto',
   targetLang: 'es',
-  provider: 'openai',
+  providerSelect: 'st_backend',
   apiUrl: '',
-  model: '',
-  connectionMode: 'manual',
+  modelInput: '',
+  connectionModeSelect: 'manual',
   apiKey: '',
   useProfileProvider: false,
-  apiKeyProfile: '',
+  apiKeyProfileSelect: '',
   batchDelay: 500,
   outputFolder: '',
 };

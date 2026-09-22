@@ -26,3 +26,20 @@ export function getSTContext() {
 export function clearSTContextCache() {
   cachedContext = null;
 }
+
+/**
+ * Devuelve el perfil de conexión activo de SillyTavern (Connection Manager).
+ * @returns {object|null}
+ */
+export function getActiveConnectionProfile() {
+  try {
+    const ctx = getSTContext();
+    const cm = ctx.extensionSettings?.connectionManager;
+    if (!cm?.selectedProfile || !Array.isArray(cm.profiles)) {
+      return null;
+    }
+    return cm.profiles.find((p) => p?.id === cm.selectedProfile) ?? null;
+  } catch {
+    return null;
+  }
+}

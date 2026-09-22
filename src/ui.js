@@ -92,7 +92,12 @@ export async function initializeExtensionPanel() {
 }
 
 export function attachTranslatorSettingsEvents() {
-  if (window.STTranslatorSettingsAttached) {
+  // ST puede re-renderizar el panel (collapse, cambio de sección). Los listeners
+  // quedan asociados a nodos muertos si confiamos en un flag global.
+  // Solución: marcar el nodo raíz viva. Si el root actual no tiene la marca,
+  // asumimos DOM nuevo y re-vinculamos todo.
+  const existingRoot = document.querySelector('.sttd-translator-panel');
+  if (existingRoot?.dataset.bound === 'true') {
     return;
   }
 
@@ -134,11 +139,15 @@ export function attachTranslatorSettingsEvents() {
     return;
   }
 
-  window.STTranslatorSettingsAttached = true;
+  if (existingRoot) {
+    existingRoot.dataset.bound = 'true';
+  }
   console.debug('ST Translator: attaching settings events');
 
   let savedConnectionProfiles = [];
+  let fullCharacterList = [];
   const FALLBACK_MODELS = {
+    st_backend: [],
     openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo'],
     openrouter: [],
     local_koboldcpp: [],
@@ -189,11 +198,17 @@ export function attachTranslatorSettingsEvents() {
   function updateProviderStatusMessage() {
     const provider = providerSelect.value;
     const endpoint = apiUrlInput.value.trim();
-    const defaultEndpoint = DEFAULT_ENDPOINTS[provider] || '';
     const statusElement = document.getElementById('providerStatusText');
     if (!statusElement) {
       return;
     }
+
+    if (provider === 'st_backend') {
+      statusElement.textContent = 'Se usará la conexión y API key configuradas en SillyTavern. No hace falta endpoint ni key manual.';
+      return;
+    }
+
+    const defaultEndpoint = DEFAULT_ENDPOINTS[provider] || '';
 
     if (!endpoint) {
       statusElement.textContent = `Uso endpoint predeterminado para ${provider}: ${defaultEndpoint}`;
@@ -330,6 +345,11 @@ export function attachTranslatorSettingsEvents() {
       throw new Error('Debe seleccionar un proveedor de traducción.');
     }
 
+    // st_backend no usa API key propia: emplea la conexión activa de SillyTavern
+    if (config.provider === 'st_backend') {
+      return config;
+    }
+
     if (config.provider === 'openai' && !config.apiKey) {
       throw new Error('OpenAI requiere una API key válida en el campo correspondiente o desde el perfil de conexión.');
     }
@@ -364,8 +384,14 @@ export function attachTranslatorSettingsEvents() {
   }
 
   function setCharacterList(characters) {
+    fullCharacterList = characters ?? [];
+    renderCharacterOptions(fullCharacterList);
+  }
+
+  function renderCharacterOptions(list) {
+    const selected = new Set(Array.from(characterBatchSelect.selectedOptions).map((o) => o.value));
     characterBatchSelect.innerHTML = '';
-    if (!characters?.length) {
+    if (!list?.length) {
       const option = document.createElement('option');
       option.textContent = 'No se encontraron personajes disponibles';
       option.disabled = true;
@@ -373,10 +399,11 @@ export function attachTranslatorSettingsEvents() {
       return;
     }
 
-    characters.forEach((item) => {
+    list.forEach((item) => {
       const option = document.createElement('option');
       option.value = item.id;
       option.textContent = item.name;
+      option.selected = selected.has(item.id);
       characterBatchSelect.appendChild(option);
     });
   }
@@ -525,20 +552,30 @@ export function attachTranslatorSettingsEvents() {
 
   function filterCharacters(query) {
     const term = (query || '').toLowerCase().trim();
-    const options = Array.from(characterBatchSelect.options);
-    options.forEach((option) => {
-      const text = option.textContent.toLowerCase();
-      option.style.display = text.includes(term) ? '' : 'none';
-    });
+    if (!term) {
+      renderCharacterOptions(fullCharacterList);
+      return;
+    }
+    renderCharacterOptions(fullCharacterList.filter((item) => item.name.toLowerCase().includes(term)));
   }
 
   function setupDragAndDrop(dropZone, input, onFiles) {
     if (!dropZone || !input) return;
 
-    const handleFiles = (files) => {
-      if (!files?.length) return;
-      input.files = files;
-      input.dispatchEvent(new Event('change', { bubbles: true }));
+    const applyFiles = (fileArray) => {
+      const files = fileArray.filter((f) => f);
+      if (!files.length) return;
+
+      // input.files solo acepta FileList; construimos una vía DataTransfer
+      try {
+        const dt = new DataTransfer();
+        files.forEach((f) => dt.items.add(f));
+        input.files = dt.files;
+      } catch (err) {
+        console.warn('ST Translator: no se pudo asignar FileList al input', err);
+      }
+
+      onFiles?.(files);
     };
 
     dropZone.addEventListener('click', () => input.click());
@@ -555,15 +592,12 @@ export function attachTranslatorSettingsEvents() {
     dropZone.addEventListener('drop', (event) => {
       event.preventDefault();
       dropZone.classList.remove('drag-over');
-      const files = Array.from(event.dataTransfer?.files || []);
-      handleFiles(files);
+      applyFiles(Array.from(event.dataTransfer?.files || []));
     });
 
-    if (onFiles) {
-      input.addEventListener('change', () => {
-        onFiles(Array.from(input.files || []));
-      });
-    }
+    input.addEventListener('change', () => {
+      applyFiles(Array.from(input.files || []));
+    });
   }
 
   async function findSavedApiKeyProfiles() {
@@ -808,6 +842,19 @@ export function attachTranslatorSettingsEvents() {
   let lastProviderSelection = providerSelect.value;
 
   function updateApiSettingsForProvider(provider, previousProvider) {
+    // st_backend no tiene endpoint editable
+    if (provider === 'st_backend') {
+      apiUrlInput.value = '';
+      apiUrlInput.placeholder = 'Gestionado por SillyTavern';
+      apiUrlInput.disabled = true;
+      apiKeyInput.disabled = true;
+      if (modelInput) modelInput.disabled = true;
+      return;
+    }
+    apiUrlInput.disabled = false;
+    apiKeyInput.disabled = false;
+    if (modelInput) modelInput.disabled = false;
+
     const defaultUrl = DEFAULT_ENDPOINTS[provider] || '';
     const currentUrl = apiUrlInput.value.trim();
     apiUrlInput.placeholder = defaultUrl;

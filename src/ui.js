@@ -148,6 +148,7 @@ export function attachTranslatorSettingsEvents() {
   let fullCharacterList = [];
   const FALLBACK_MODELS = {
     st_backend: [],
+    st_connection_profile: [],
     openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo'],
     openrouter: [],
     local_koboldcpp: [],
@@ -156,7 +157,7 @@ export function attachTranslatorSettingsEvents() {
     llm_studio: [],
     google_aistudio: ['gemini-1.5-flash', 'gemini-1.5-pro'],
     google_translate: [],
-    electron_hub: ['default'],
+    electron_hub: ['gpt-4o-mini', 'gpt-4o'],
   };
 
   function normalizeProviderKey(value) {
@@ -186,6 +187,7 @@ export function attachTranslatorSettingsEvents() {
     const normalized = url.toLowerCase();
     if (normalized.includes('openai.com/v1')) return 'openai';
     if (normalized.includes('openrouter.ai')) return 'openrouter';
+    if (normalized.includes('electronhub.ai') || normalized.includes('electron-hub')) return 'electron_hub';
     if (normalized.includes('127.0.0.1:11434') || normalized.includes('/api.completions') || normalized.includes('/api/completions')) return 'ollama';
     if (normalized.includes('127.0.0.1:8080/v1/completions') || normalized.includes('llama_cpp')) return 'llama_cpp';
     if (normalized.includes('127.0.0.1:5000/api/v1/generate') || normalized.includes('kobold')) return 'local_koboldcpp';
@@ -288,7 +290,6 @@ export function attachTranslatorSettingsEvents() {
       updateModelSuggestionList(providerSelect.value);
     }, 800);
   }
-
   function buildProviderConfig() {
     const provider = providerSelect.value;
     const config = {
@@ -301,41 +302,36 @@ export function attachTranslatorSettingsEvents() {
 
     const mode = connectionModeSelect.value;
     if (mode === 'st_global') {
-      const inferred = getInferredSTProfile();
-      if (inferred) {
-        console.debug('ST Translator: using inferred ST profile', inferred);
-        if (inferred.apiKey) config.apiKey = inferred.apiKey;
-        if (inferred.apiUrl) config.apiUrl = inferred.apiUrl;
-        if (inferred.provider) config.provider = inferred.provider;
-        if (inferred.model) config.model = inferred.model;
-      }
+      // Sustituimos todo: usamos generateQuietPrompt (credenciales server-side)
+      config.provider = 'st_backend';
+      delete config.apiKey;
+      delete config.apiUrl;
     }
 
-    if (mode === 'saved_profile' || useProfileProviderCheckbox.checked) {
+    if (mode === 'saved_profile') {
       const profileIndex = apiKeyProfileSelect.value;
-      if (profileIndex) {
-        const profile = savedConnectionProfiles[Number(profileIndex)];
-        if (profile) {
-          if (profile.apiKey) config.apiKey = profile.apiKey;
-          if (profile.apiUrl) config.apiUrl = profile.apiUrl;
-
-          const rawProvider = profile.provider || profile.api || profile.service || profile.type || profile.backend || profile.engine || profile.modelProvider || profile.providerType || profile.connectionType || profile.provider_name || profile.api_type;
-          const resolvedProvider = normalizeProviderKey(rawProvider) || guessProviderFromUrl(profile.apiUrl);
-          console.debug('ST Translator: resolved provider from profile override', resolvedProvider, 'from rawProvider', rawProvider);
-          if (resolvedProvider && Array.from(providerSelect.options).some((option) => option.value === resolvedProvider)) {
-            config.provider = resolvedProvider;
-          } else if (profile.provider) {
-            console.warn('ST Translator: profile provider not compatible', profile.provider);
-          }
-
-          if (profile.model) {
-            config.model = profile.model;
-          }
+      const profile = savedConnectionProfiles[Number(profileIndex)];
+      if (profile?.id) {
+        // Usa ConnectionManagerRequestService: resuelve la key server-side
+        config.provider = 'st_connection_profile';
+        config.profileId = profile.id;
+        if (profile.model) config.model = profile.model;
+        delete config.apiKey;
+        delete config.apiUrl;
+      } else if (profile) {
+        // Perfil sin id (importado de otra fuente): usar credenciales copiadas
+        if (profile.apiKey) config.apiKey = profile.apiKey;
+        if (profile.apiUrl) config.apiUrl = profile.apiUrl;
+        if (profile.model) config.model = profile.model;
+        const resolvedProvider = normalizeProviderKey(profile.provider) || guessProviderFromUrl(profile.apiUrl);
+        if (resolvedProvider && Array.from(providerSelect.options).some((o) => o.value === resolvedProvider)) {
+          config.provider = resolvedProvider;
         }
       }
     }
 
     console.debug('ST Translator: final provider config', config);
+
     return config;
   }
 
@@ -347,6 +343,15 @@ export function attachTranslatorSettingsEvents() {
 
     // st_backend no usa API key propia: emplea la conexión activa de SillyTavern
     if (config.provider === 'st_backend') {
+      return config;
+    }
+
+    // st_connection_profile no usa API key en navegador: usa el secret-id del
+    // perfil resuelto server-side por ConnectionManagerRequestService
+    if (config.provider === 'st_connection_profile') {
+      if (!config.profileId) {
+        throw new Error('Seleccione un perfil de conexión guardado.');
+      }
       return config;
     }
 
@@ -434,11 +439,11 @@ export function attachTranslatorSettingsEvents() {
     const model = profile.model || profile.modelName || profile.model_id || profile.modelId || profile.defaultModel || profile.default_model;
     const name = profile.name || profile.label || profile.title || profile.id || profile.uuid || profile.nameLabel || 'Perfil desconocido';
 
-    if (!apiKey && !apiUrl && !provider) {
+    if (!apiKey && !apiUrl && !provider && !profile.id) {
       return null;
     }
 
-    return { name, apiKey, apiUrl, provider, model };
+    return { id: profile.id, name, apiKey, apiUrl, provider, model };
   }
 
   function getInferredSTProfile() {
@@ -578,7 +583,14 @@ export function attachTranslatorSettingsEvents() {
       onFiles?.(files);
     };
 
-    dropZone.addEventListener('click', () => input.click());
+    dropZone.addEventListener('click', (event) => {
+      // El input vive dentro del dropZone; si el click viene del propio input
+      // (burbujeo tras input.click()), ignorarlo o entramos en recursión.
+      if (event.target === input) {
+        return;
+      }
+      input.click();
+    });
 
     dropZone.addEventListener('dragover', (event) => {
       event.preventDefault();
@@ -711,10 +723,23 @@ export function attachTranslatorSettingsEvents() {
     apiKeyLoadButton.disabled = !useProfileMode;
     useProfileProviderCheckbox.disabled = !(mode === 'manual' || useProfileMode);
 
-    if (useGlobalMode) {
+    if (useGlobalMode || useProfileMode) {
+      // En estos modos el backend de ST resuelve la credencial; bloquear los
+      // campos manuales para dejar claro qué ruta se usará realmente.
+      providerSelect.disabled = true;
+      apiUrlInput.disabled = true;
+      apiUrlInput.placeholder = useGlobalMode
+        ? 'Gestionado por SillyTavern (conexión activa)'
+        : 'Gestionado por SillyTavern (perfil de conexión)';
+      apiKeyInput.disabled = true;
+      apiKeyInput.placeholder = 'Resuelta server-side por SillyTavern';
+      modelInput.disabled = useGlobalMode;
+    } else {
       providerSelect.disabled = false;
       apiUrlInput.disabled = false;
+      apiKeyInput.disabled = false;
       modelInput.disabled = false;
+      updateApiSettingsForProvider(providerSelect.value, providerSelect.value);
     }
 
     updateStatusDetails();
@@ -734,16 +759,18 @@ export function attachTranslatorSettingsEvents() {
       return;
     }
 
-    if (profile.apiKey) {
-      apiKeyInput.value = profile.apiKey;
+    // Rellenar solo de manera informativa; la credencial real se resuelve
+    // server-side usando profile.id vía ConnectionManagerRequestService
+    if (profile.model && modelInput && !modelInput.value.trim()) {
+      modelInput.value = profile.model;
+    }
+    if (profile.apiUrl && connectionModeSelect.value !== 'st_global') {
+      apiUrlInput.value = profile.apiUrl;
     }
 
-    if (useProfileProviderCheckbox.checked) {
-      applyProfileProviderSettings(profile);
-    }
-
-    updateModelSuggestionList(providerSelect.value);
     updateProviderStatusMessage();
+    updateStatusDetails();
+    statusText.textContent = `Perfil "${profile.name}" seleccionado. Se traducirá usando ese perfil vía ST.`;
   }
 
   apiKeyProfileSelect.addEventListener('change', applyProfileSelection);

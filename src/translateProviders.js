@@ -8,13 +8,14 @@ import {
 
 export const DEFAULT_ENDPOINTS = {
   st_backend: '(Usa la conexión activa de SillyTavern)',
+  st_connection_profile: '(Usa un perfil de conexión de SillyTavern)',
   openai: 'https://api.openai.com/v1/chat/completions',
   local_koboldcpp: 'http://127.0.0.1:5000/api/v1/generate',
   llama_cpp: 'http://127.0.0.1:8080/v1/completions',
   ollama: 'http://127.0.0.1:11434/api/completions',
   llm_studio: 'http://127.0.0.1:8080/api/v1/generate',
-  openrouter: 'https://openrouter.ai/v1/chat/completions',
-  electron_hub: 'http://127.0.0.1:3000/generate',
+  openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+  electron_hub: 'https://api.electronhub.ai/v1/chat/completions',
   google_aistudio: 'https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText',
   google_translate: 'https://translation.googleapis.com/language/translate/v2',
 };
@@ -22,6 +23,7 @@ export const DEFAULT_ENDPOINTS = {
 export const DEFAULT_TRANSLATION_PROVIDER = 'st_backend';
 export const SUPPORTED_TRANSLATION_PROVIDERS = [
   'st_backend',
+  'st_connection_profile',
   'openai',
   'local_koboldcpp',
   'llama_cpp',
@@ -51,12 +53,45 @@ export async function translateWithSTBackend(text, sourceLang, targetLang) {
   return result.trim();
 }
 
+/**
+ * Traduce usando un perfil guardado del Connection Manager de SillyTavern.
+ * Con esto la request la ejecuta el backend de ST (sin CORS) y la API key
+ * se resuelve server-side desde 'secret-id' del perfil.
+ *
+ * @param {string} profileId - ID del perfil (extensionSettings.connectionManager.profiles[].id)
+ */
+export async function translateWithSTConnectionProfile(profileId, text, sourceLang, targetLang, maxTokens = 1200) {
+  const ctx = globalThis.SillyTavern?.getContext?.();
+  const service = ctx?.ConnectionManagerRequestService;
+  if (!service?.sendRequest) {
+    throw new Error('ConnectionManagerRequestService no disponible. ¿Está habilitado el Connection Manager?');
+  }
+
+  const messages = [
+    { role: 'system', content: 'Eres un traductor preciso. Conserva literales y placeholders sin cambiarlos.' },
+    { role: 'user', content: buildTranslatePrompt(text, sourceLang, targetLang) },
+  ];
+
+  const result = await service.sendRequest(profileId, messages, maxTokens, { stream: false, extractData: true });
+  const content = result?.content ?? result?.text ?? (typeof result === 'string' ? result : '');
+  if (!content || !String(content).trim()) {
+    throw new Error('El perfil de conexión devolvió una respuesta vacía.');
+  }
+  return String(content).trim();
+}
+
 export async function translateText(text, sourceLang, targetLang, providerConfig = { provider: DEFAULT_TRANSLATION_PROVIDER }) {
   const provider = providerConfig.provider || DEFAULT_TRANSLATION_PROVIDER;
 
   switch (provider) {
     case 'st_backend':
       return translateWithSTBackend(text, sourceLang, targetLang);
+    case 'st_connection_profile': {
+      if (!providerConfig.profileId) {
+        throw new Error('st_connection_profile: falta profileId del perfil de conexión.');
+      }
+      return translateWithSTConnectionProfile(providerConfig.profileId, text, sourceLang, targetLang);
+    }
     case 'openai':
       return translateWithOpenAI(text, sourceLang, targetLang, providerConfig);
     case 'local_koboldcpp':
@@ -247,22 +282,36 @@ async function translateWithOpenRouter(text, sourceLang, targetLang, providerCon
 }
 
 async function translateWithElectronHub(text, sourceLang, targetLang, providerConfig) {
+  const apiKey = providerConfig.apiKey;
   const apiUrl = providerConfig.apiUrl || DEFAULT_ENDPOINTS.electron_hub;
+  const model = providerConfig.model || 'gpt-4o-mini';
   const prompt = buildTranslatePrompt(text, sourceLang, targetLang);
   const body = {
-    prompt,
-    model: providerConfig.model || 'default',
-    max_tokens: providerConfig.maxTokens || 1024,
+    model,
+    messages: [
+      { role: 'system', content: 'Eres un traductor preciso. Conserva literales y placeholders sin cambiarlos.' },
+      { role: 'user', content: prompt },
+    ],
     temperature: providerConfig.temperature ?? 0.2,
+    max_tokens: providerConfig.maxTokens || 1200,
   };
 
-  const result = await fetchJson(apiUrl, {
-    method: 'POST',
-    headers: buildJsonHeaders(providerConfig.apiKey),
-    body: JSON.stringify(body),
-  });
-
-  return parseGenericCompletionResponse(result);
+  try {
+    const result = await fetchJson(apiUrl, {
+      method: 'POST',
+      headers: buildJsonHeaders(apiKey),
+      body: JSON.stringify(body),
+    });
+    return parseOpenAIResponse(result);
+  } catch (error) {
+    if (error.message.includes('401')) {
+      throw new Error(`Electron Hub: API key inválida. Verifica tu clave.`);
+    }
+    if (error.message.includes('429')) {
+      throw new Error(`Electron Hub: Límite de uso excedido.`);
+    }
+    throw new Error(`Error con Electron Hub: ${error.message}`);
+  }
 }
 
 async function translateWithGoogleAIStudio(text, sourceLang, targetLang, providerConfig) {
@@ -337,7 +386,8 @@ const MODEL_CACHE_KEY = 'stTranslateModelCache';
 const MODEL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const PROVIDER_MODEL_ENDPOINTS = {
-  st_backend: null,     // los modelos vienen del backend ST, no listable directo
+  st_backend: null,       // los modelos vienen del backend ST, no listable directo
+  st_connection_profile: null, // el modelo lo define el propio perfil
   openai: {
     url: (apiUrl) => apiUrl?.replace(/\/chat\/completions$/, '/models') ?? 'https://api.openai.com/v1/models',
     map: (data) => (data?.data ?? []).map((m) => m.id),
@@ -345,6 +395,10 @@ const PROVIDER_MODEL_ENDPOINTS = {
   openrouter: {
     url: () => 'https://openrouter.ai/api/v1/models',
     map: (data) => (data?.data ?? []).map((m) => m.id),
+  },
+  electron_hub: {
+    url: () => 'https://api.electronhub.ai/v1/models',
+    map: (data) => (data?.data ?? data?.models ?? []).map((m) => m.id ?? m.name),
   },
   ollama: {
     url: (apiUrl) => `${(apiUrl || DEFAULT_ENDPOINTS.ollama).replace(/\/api\/.*/, '')}/api/tags`,
@@ -367,7 +421,6 @@ const PROVIDER_MODEL_ENDPOINTS = {
     map: (data) => (data?.models ?? []).map((m) => m.name),
   },
   google_translate: null,   // no tiene lista de modelos pública accesible
-  electron_hub: null,       // modelo genérico, sin endpoint de modelos
 };
 
 /**
@@ -397,7 +450,7 @@ export async function getModelsForProvider(provider, { apiKey, apiUrl } = {}) {
   try {
     const headers = endpoint.buildHeaders
       ? endpoint.buildHeaders(apiKey)
-      : (provider === 'openai' || provider === 'openrouter' || provider === 'local_koboldcpp' || provider === 'llama_cpp' || provider === 'llm_studio')
+      : ['openai', 'openrouter', 'local_koboldcpp', 'llama_cpp', 'llm_studio', 'electron_hub'].includes(provider)
         ? buildJsonHeaders(apiKey)
         : {};
 

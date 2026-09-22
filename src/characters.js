@@ -101,8 +101,9 @@ export async function translateCharacters(characters, sourceLang = 'auto', targe
 
 /**
  * Devuelve todos los personajes registrados en SillyTavern (API oficial).
- * Usa `getCharacters()` para garantizar que incluso los personajes no
- * cargados en sesión aparezcan en la lista.
+ * Lee el array `ctx.characters` directamente — es la fuente canónica.
+ * NO llamar a ctx.getCharacters(): no devuelve datos (muta el array y
+ * re-renderiza la UI de ST como side-effect, señal de uso interno).
  *
  * @returns {Promise<Array<{id: string, name: string, data: object}>>}
  */
@@ -111,27 +112,16 @@ export async function getAvailableCharacters() {
   try {
     ctx = getSTContext();
   } catch (err) {
-    console.warn('ST Translator: contexto ST no disponible aún, usando fallback cacheado', err?.message);
+    console.warn('ST Translator: contexto ST no disponible aún', err?.message);
     return [];
   }
 
-  // Forzar la lista completa (incluye personajes no cargados en la sesión actual)
-  let rawList = [];
-  try {
-    if (typeof ctx.getCharacters === 'function') {
-      rawList = await ctx.getCharacters();
-    } else if (Array.isArray(ctx.characters)) {
-      rawList = ctx.characters;
-    }
-  } catch (err) {
-    console.warn('ST Translator: getCharacters() falló, usando ctx.characters como fallback', err);
-    rawList = Array.isArray(ctx.characters) ? ctx.characters : [];
-  }
+  const list = Array.isArray(ctx.characters) ? ctx.characters : [];
 
-  return rawList
+  return list
     .filter((c) => c && (c.name || c.avatar))
-    .map((c) => ({
-      id: c.avatar ?? c.name,   // id estable: nombre de fichero PNG
+    .map((c, index) => ({
+      id: c.avatar || `char-${index}`,   // id estable: nombre de fichero PNG/avatar
       name: c.name ?? c.avatar ?? 'Desconocido',
       data: c,
     }));

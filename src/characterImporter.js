@@ -47,6 +47,14 @@ export class CharacterProvider {
    */
   toCharacterCard(raw, url) {
     const f = this.toCardFields(raw);
+    // authorNote: nota del autor que el sitio muestra bajo la card (JuicyChat/Tipsy).
+    // Si no hay, se genera una con los metadatos útiles de la extracción.
+    const notes = f.authorNote
+      ? `${f.authorNote}\n\n---\nExtraído de: ${url}`
+      : (f.extraInfo
+        ? `Extraído de: ${url}\n\n${f.extraInfo}`
+        : `Extraído de: ${url}`);
+
     return {
       card: {
         spec: 'chara_card_v2',
@@ -58,11 +66,11 @@ export class CharacterProvider {
           scenario: f.scenario || '',
           first_mes: f.first_mes || '',
           mes_example: f.mes_example || '',
-          creator_notes: `Extracted from ${url}`,
-          system_prompt: '',
-          post_history_instructions: '',
-          alternate_greetings: [],
-          character_book: null,
+          creator_notes: notes,
+          system_prompt: f.systemPrompt || '',
+          post_history_instructions: f.postHistory || '',
+          alternate_greetings: f.alternateGreetings || [],
+          character_book: f.characterBook || null,
           tags: ['ideas', ...(f.tags || [])],
           creator: f.creator || '',
           character_version: '1.0',
@@ -109,10 +117,21 @@ export class MoescapeProvider extends CharacterProvider {
       scenario: raw.world_scenario || '',
       first_mes: raw.char_greeting || '',
       mes_example: raw.example_dialogue || '',
+      authorNote: raw.creator_note || raw.creator_notes || raw.creator_comment || '',
+      systemPrompt: raw.char_system_prompt || raw.system_prompt || '',
+      postHistory: raw.char_post_history_instructions || raw.post_history_instructions || '',
+      alternateGreetings: Array.isArray(raw.alternative_greetings)
+        ? raw.alternative_greetings.filter(Boolean)
+        : (raw.char_alternative_greetings ? [raw.char_alternative_greetings] : []),
       tags: Array.isArray(raw.hashtags) ? raw.hashtags : [],
       creator: raw.creator_name || '',
       avatarUrl: raw.thumbnail_photo?.url || raw.background_photos?.[0]?.url || null,
       backgroundUrls: (raw.background_photos || []).map((p) => p?.url).filter(Boolean),
+      extraInfo: [
+        raw.nickname ? `nickname: ${raw.nickname}` : '',
+        raw.content_rating ? `content_rating: ${raw.content_rating}` : '',
+        typeof raw.chat_count === 'number' ? `chat_count: ${raw.chat_count}` : '',
+      ].filter(Boolean).join('\n'),
     };
   }
 }
@@ -148,49 +167,44 @@ export class TipsyProvider extends CharacterProvider {
   }
 
   toCardFields(raw) {
-    // Yusuke tras comprobar el endpoint real: el `character` interno tiene keys:
-    // nickname, introduction (resumen), greeting (primer mensaje), image_url (absoluta ya)
-    // o face_url (avatar alternativo), tags[], gender, nsfw, etc.
-    const avatar = raw.image_url || raw.face_url || raw.animated_image_url || null;
+    // Verificado contra la API real: el objeto `character` trae nickname,
+    // introduction (pitch corto), greeting (primer mensaje), image_url (principal,
+    // con watermark), face_url (recorte cuadrado del mismo render), etc.
+    const avatar = raw.image_url || raw.animated_image_url || raw.face_url || null;
     const tags = Array.isArray(raw.tags)
       ? raw.tags.map((t) => (typeof t === 'string' ? t : (t?.desc || t?.alias || t?.name))).filter(Boolean)
       : [];
 
-    // Tipsy a veces incluye variantes del personaje: image_url (main, watermark),
-    // face_url (avatar por defecto), animated_image_url (GIF/WebP animado),
-    // pc_image_url (versión desktop), video_url (video corto). Todas son válidas
-    // como assets: las exponemos para que el handler descargue las disponibles.
-    const allImageUrls = [
-      raw.image_url,           // principal
-      raw.face_url,            // avatar secundario
-      raw.animated_image_url,  // animado (si lo hay)
-      raw.pc_image_url,        // con sufijo pc
-      raw.image,               // campos raw (a veces vienen vacíos)
-      raw.pc_image,
+    // face_url es un recorte del MISMO render que image_url (mismo seed, distinto
+    // encuadre). No aporta información, así que no se descarga como imagen extra.
+    // Solo se recoge si es la única imagen disponible.
+    const extraImages = [
+      raw.animated_image_url,  // GIF/WebP animado, si existe
+      raw.pc_image_url,        // versión escritorio, si existe
     ].filter(Boolean);
-
-    // Deduplicar
-    const uniqImages = [...new Set(allImageUrls)];
 
     return {
       name: raw.nickname || raw.name || 'Tipsy character',
-      description: stripInlineImagesInTipsy(raw.introduction || raw.description || ''),
+      description: stripInlineImagesInTipsy(raw.description || raw.introduction || ''),
       personality: Array.isArray(raw.personality) ? raw.personality.filter(Boolean).join(', ') : (raw.personality || ''),
       scenario: stripInlineImagesInTipsy(raw.scenario || ''),
       first_mes: stripInlineImagesInTipsy(raw.greeting || raw.first_message || ''),
       mes_example: stripInlineImagesInTipsy(raw.example_dialogue || raw.dialog_example || ''),
+      // Tipsy no expone system_prompt ni post_history en el endpoint público
+      systemPrompt: '',
+      postHistory: '',
+      alternateGreetings: [],
       tags,
       creator: raw.creator_name || raw.author_name || '',
       avatarUrl: avatar && !/^https?:/i.test(avatar) ? `https://img.tipsy.chat/${avatar.replace(/^\//, '')}` : avatar,
-      backgroundUrls: uniqImages.filter((u) => u !== avatar),
-      tipsyMeta: {
-        gender: raw.gender || null,
-        nsfw: raw.nsfw ?? false,
-        language: raw.lang || null,
-        conversation_style: raw.conversation_style ?? null,
-        hasVideo: Boolean(raw.video_url || raw.video),
-        hasAnimatedImage: Boolean(raw.animated_image_url || raw.animated_image),
-      },
+      backgroundUrls: extraImages,
+      extraInfo: [
+        raw.gender ? `gender: ${raw.gender}` : '',
+        raw.lang ? `language: ${raw.lang}` : '',
+        raw.nsfw ? 'nsfw: yes' : '',
+        typeof raw.character_type === 'number' ? `character_type: ${raw.character_type}` : '',
+        typeof raw.min_context_length === 'number' && raw.min_context_length > 0 ? `min_context_length: ${raw.min_context_length}` : '',
+      ].filter(Boolean).join('\n'),
     };
   }
 }
@@ -310,7 +324,25 @@ export class JuicyChatProvider extends CharacterProvider {
     // inline del sitio; SillyTavern no las sirve (CORS). Se quitan.
     const stripInlineImages = (s) => (s || '').replace(/!\[[^\]]*\]\(https?:[^)]+\)/g, '').trim();
 
-    const desc = stripInlineImages(raw.introduction || raw.description || '');
+    // `setting` es el campo que describe realmente al personaje
+    // ("{{char}} is Hazel (step-mom), Veronica..."). Es el equivalente directo del
+    // campo Description de SillyTavern, así que va allí (no a personality).
+    // `introduction` es solo el pitch de marketing de la card, va a creator_notes.
+    const setting = stripInlineImages(raw.setting || '');
+    const intro = stripInlineImages(raw.introduction || raw.description || '');
+    const desc = setting || intro;
+
+    // sceneCard: tarjeta de escena (defaultScene, displayType) — útil como extra
+    let sceneCardNote = '';
+    try {
+      const sc = typeof raw.sceneCard === 'string' ? JSON.parse(raw.sceneCard) : raw.sceneCard;
+      if (sc && typeof sc === 'object') {
+        const parts = [];
+        if (sc.defaultScene != null) parts.push(`defaultScene=${sc.defaultScene}`);
+        if (sc.displayType != null) parts.push(`displayType=${sc.displayType}`);
+        if (parts.length) sceneCardNote = parts.join(', ');
+      }
+    } catch { /* sceneCard no es JSON */ }
 
     // Galería: cada imagen lleva su propio switch de paywall — clearPictureUrl SOLO
     // viene en el payload si el usuario actual la desbloqueó o es gratis (unlockCoin 0).
@@ -388,12 +420,22 @@ export class JuicyChatProvider extends CharacterProvider {
       scenario: stripInlineImages(raw.scenario || ''),
       first_mes: stripInlineImages(raw.greeting || raw.firstMessage || ''),
       mes_example: stripInlineImages(raw.exampleConversation?.[0] || ''),
+      // introduction es el pitch de la card, no la descripción -> creator_notes
+      authorNote: stripInlineImages(raw.authorNote || raw.author_note || '') || intro,
       tags: Array.isArray(raw.characterTags) ? raw.characterTags : [],
       creator: raw.characterUserInfo?.userName || raw.userName || '',
+      age: raw.characterAge ?? null,
       // preferir thumb: siempre JPEG estático (characterPhoto a veces es GIF)
       avatarUrl: raw.characterThumb || raw.characterPhoto || null,
       backgroundUrls: [raw.characterPhoto, raw.characterThumb, ...unlockedUrls, ...galleryCovers]
         .filter((u, i, a) => u && a.indexOf(u) === i),
+      extraInfo: [
+        sceneCardNote ? `sceneCard: ${sceneCardNote}` : '',
+        raw.figureId ? `figureId: ${raw.figureId}` : '',
+        typeof raw.chatCount === 'number' ? `chatCount: ${raw.chatCount}` : '',
+        typeof raw.galleryCount === 'number' ? `galleryCount: ${raw.galleryCount}` : '',
+        typeof raw.genPictureCount === 'number' ? `genPictureCount: ${raw.genPictureCount}` : '',
+      ].filter(Boolean).join('\n'),
       galleryInfo: {
         albumCount: (raw._gallery?.albumList ?? []).length,
         galleryCount: (raw._gallery?.galleryList ?? []).length,

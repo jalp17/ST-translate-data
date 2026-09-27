@@ -90,6 +90,57 @@ function dumpStorageHint() {
   }
   console.log('[export] Claves en los almacenes:', keys.length ? keys : '(ninguna)');
   console.log('[export] Cookies:', document.cookie);
+  // La web guarda aquí el perfil del usuario; suele contener el token o su
+  // equivalente, quizá codificado en base64.
+  for (const k of ['/user', 'user', '_user_id']) {
+    try {
+      const v = localStorage.getItem(k);
+      if (v) console.log('[export] localStorage["' + k + '"] =', v.slice(0, 600));
+    } catch {}
+  }
+}
+
+/**
+ * Devuelve la cabecera Authorization que la propia web usa, interceptando una
+ * petición real que ya hace el sitio. Devuelve null si no capturó nada.
+ */
+function captureAuthHeader(timeoutMs) {
+  return new Promise((resolve) => {
+    const origFetch = window.fetch;
+    const origOpen = XMLHttpRequest.prototype.open;
+    const origSet = XMLHttpRequest.prototype.setRequestHeader;
+    let found = null;
+
+    window.fetch = function (...args) {
+      try {
+        const req = new Request(...args);
+        const auth = req.headers.get('authorization') || req.headers.get('token');
+        if (auth && !found) found = auth.replace(/^Bearer\s+/i, '').trim();
+        req.headers.forEach((v, k) => {
+          if ((k === 'token' || k === 'authorization') && v && !found) {
+            found = v.replace(/^Bearer\s+/i, '').trim();
+          }
+        });
+      } catch {}
+      return origFetch.apply(this, args);
+    };
+
+    XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+      try {
+        if ((/^(authorization|token)$/i.test(name)) && value && !found) {
+          found = String(value).replace(/^Bearer\s+/i, '').trim();
+        }
+      } catch {}
+      return origSet.apply(this, arguments);
+    };
+
+    setTimeout(() => {
+      window.fetch = origFetch;
+      XMLHttpRequest.prototype.open = origOpen;
+      XMLHttpRequest.prototype.setRequestHeader = origSet;
+      resolve(found);
+    }, timeoutMs);
+  });
 }
 
 function download(filename, text) {
@@ -132,15 +183,44 @@ function toSillyTavernJsonl(messages, charName) {
 const TIPSY = `(async () => {
 ${COMMON}
   const HOST = 'https://api.tipsy.chat';
-  const token = findToken(['token', 'access_token', 'accessToken', 'jwt', 'user_token']);
+
+  // --- 1) Almacenes web (localStorage / sessionStorage / cookies) ---
+  let token = findToken(['token', 'access_token', 'accessToken', 'jwt']);
+  if (token) _log('Token encontrado en el almacenamiento (' + token.length + ' chars)');
+
+  // --- 2) Si no aparece, espera a que la web haga una petición propia y le
+  //        lee la cabecera Authorization que usa realmente ---
   if (!token) {
-    _err('No se encontro el token de sesion.');
-    _err('Se busca en cookies y en localStorage/sessionStorage.');
-    _err('Causas probables: sesion no iniciada, o el token es HttpOnly (pégalo a mano).');
+    _log('Buscando el token en las peticiones que hace la web...');
+    _log('Cambia de sección en el sitio (navega) y vuelve: se capturará solo.');
+    token = await captureAuthHeader(20000);
+    if (token) _log('Token capturado de una petición real (' + token.length + ' chars)');
+  }
+
+  // --- 3) Última opción: pegarlo a mano desde DevTools > Network ---
+  if (!token) {
+    _err('No se pudo detectar el token automaticamente.');
+    _err('');
+    _err('Para obtenerlo a mano:');
+    _err('  1. F12 > pestana Network (Red)');
+    _err('  2. Recarga la pagina para que salten peticiones');
+    _err('  3. Filtra por "api.tipsy.chat" y pulsa CUALQUIER peticion POST');
+    _err('  4. En Headers > Request Headers, copia el valor de:');
+    _err('       Authorization:  (solo lo que va despues de "Bearer ")');
+    _err('     o el header "token" si aparece ese en su lugar');
+    _err('');
+    const manual = prompt('Pega aqui el token de sesion:');
+    if (manual && manual.trim().length > 20) {
+      token = manual.trim().replace(/^Bearer\s+/i, '');
+      _log('Token pegado a mano (' + token.length + ' chars)');
+    }
+  }
+
+  if (!token) {
+    _err('Sin token no se puede continuar.');
     dumpStorageHint();
     return;
   }
-  _log('Token encontrado (' + token.length + ' chars)');
 
   const api = (path, body) => fetch(HOST + path, {
     method: 'POST',

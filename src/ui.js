@@ -972,6 +972,46 @@ export function attachTranslatorSettingsEvents() {
    * sustituye el label por "Procesando...", muestra un spinner en la barra
    * y restaura al terminar (éxito o error).
    */
+  /**
+   * Descarga una imagen usando, en orden: fetch directo → proxy CORS de ST.
+   * Tipsy (img.tipsy.chat) no envía CORS headers, así que el fetch directo
+   * suele fallar desde el navegador; el proxy de ST (/proxy/:url) lo burla
+   * porque la petición la hace el servidor de ST (server-to-server).
+   *
+   * @param {string} imageUrl URL original de la imagen
+   * @returns {Promise<Blob>} mesma blobs, con HTTP status content-type preservado
+   */
+  async function downloadImage(imageUrl) {
+    // 1. Intento directo (funciona si el CDN si emite CORS headers)
+    try {
+      const r = await fetch(imageUrl);
+      if (r.ok) return await r.blob();
+      throw new Error(`HTTP ${r.status}`);
+    } catch (directError) {
+      console.debug('ST Translator: fallo fetch directo, probando proxy CORS de ST', directError.message);
+    }
+
+    // 2. Fallback: proxy CORS del servidor de SillyTavern
+    // Ruta exacta: /proxy/:url(*) -> src/server-main.js:258
+    const proxyUrl = `/proxy/${encodeURIComponent(imageUrl)}`;
+    try {
+      const r = await fetch(proxyUrl);
+      if (!r.ok) {
+        const msg = await r.text();
+        if (r.status === 404 && msg.includes('CORS proxy is disabled')) {
+          throw new Error(
+            'CORS proxy de SillyTavern está deshabilitado (necesario para descargar imágenes de sitios sin CORS habilitado). ' +
+            'Habilítalo en SillyTavern/config.yaml (enableCorsProxy: true) y reinicia, o descarga la imagen manualmente.'
+          );
+        }
+        throw new Error(`Proxy respondió ${r.status}: ${msg.slice(0, 150)}`);
+      }
+      return await r.blob();
+    } catch (proxyError) {
+      throw new Error(`No se pudo descargar la imagen (${proxyError.message}). URL: ${imageUrl}`);
+    }
+  }
+
   function withBusyState(button, busyLabel, handler) {
     return async (event) => {
       if (button.dataset.busy === 'true') {
@@ -1187,16 +1227,7 @@ export function attachTranslatorSettingsEvents() {
         }
 
         updateProgress(60, 'Descargando avatar...');
-        let imageResponse;
-        try {
-          imageResponse = await fetch(avatarUrl);
-        } catch (netError) {
-          throw new Error(`No se pudo descargar el avatar (posible CORS): ${netError.message}. Usa el JSON alternativo o guarda la imagen manualmente.`);
-        }
-        if (!imageResponse.ok) {
-          throw new Error(`El avatar respondió ${imageResponse.status}.`);
-        }
-        const imageBlob = await imageResponse.blob();
+        const imageBlob = await downloadImage(avatarUrl);
 
         updateProgress(75, 'Construyendo PNG con la tarjeta...');
         const { buildCharacterCardPng } = await import('./characterImporter.js');
@@ -1229,9 +1260,7 @@ export function attachTranslatorSettingsEvents() {
           for (let i = 0; i < backgroundList.length; i++) {
             const imgUrl = backgroundList[i];
             try {
-              const r = await fetch(imgUrl);
-              if (!r.ok) continue;
-              const b = await r.blob();
+              const b = await downloadImage(imgUrl);
               const ext = (imgUrl.split('?')[0].split('.').pop() || 'png').slice(0, 5);
               const base = card.data.name.replace(/[/\\?%*:|"<>]/g, '_');
               const galleryName = `${base}_gallery-${i + 1}.${ext}`;

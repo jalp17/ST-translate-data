@@ -155,6 +155,23 @@ export class TipsyProvider extends CharacterProvider {
     const tags = Array.isArray(raw.tags)
       ? raw.tags.map((t) => (typeof t === 'string' ? t : (t?.desc || t?.alias || t?.name))).filter(Boolean)
       : [];
+
+    // Tipsy a veces incluye variantes del personaje: image_url (main, watermark),
+    // face_url (avatar por defecto), animated_image_url (GIF/WebP animado),
+    // pc_image_url (versión desktop), video_url (video corto). Todas son válidas
+    // como assets: las exponemos para que el handler descargue las disponibles.
+    const allImageUrls = [
+      raw.image_url,           // principal
+      raw.face_url,            // avatar secundario
+      raw.animated_image_url,  // animado (si lo hay)
+      raw.pc_image_url,        // con sufijo pc
+      raw.image,               // campos raw (a veces vienen vacíos)
+      raw.pc_image,
+    ].filter(Boolean);
+
+    // Deduplicar
+    const uniqImages = [...new Set(allImageUrls)];
+
     return {
       name: raw.nickname || raw.name || 'Tipsy character',
       description: stripInlineImagesInTipsy(raw.introduction || raw.description || ''),
@@ -164,14 +181,15 @@ export class TipsyProvider extends CharacterProvider {
       mes_example: stripInlineImagesInTipsy(raw.example_dialogue || raw.dialog_example || ''),
       tags,
       creator: raw.creator_name || raw.author_name || '',
-      // image_url ya viene absoluta en la API real — sin prefijo
       avatarUrl: avatar && !/^https?:/i.test(avatar) ? `https://img.tipsy.chat/${avatar.replace(/^\//, '')}` : avatar,
-      backgroundUrls: [],
+      backgroundUrls: uniqImages.filter((u) => u !== avatar),
       tipsyMeta: {
         gender: raw.gender || null,
         nsfw: raw.nsfw ?? false,
         language: raw.lang || null,
         conversation_style: raw.conversation_style ?? null,
+        hasVideo: Boolean(raw.video_url || raw.video),
+        hasAnimatedImage: Boolean(raw.animated_image_url || raw.animated_image),
       },
     };
   }

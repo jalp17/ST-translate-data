@@ -78,20 +78,23 @@ export async function translateCharacterData(character, sourceLang = 'auto', tar
   return translated;
 }
 
-export async function translateCharacters(characters, sourceLang = 'auto', targetLang = 'es', batchDelay = 500, providerConfig = { provider: 'openai' }) {
+export async function translateCharacters(characters, sourceLang = 'auto', targetLang = 'es', batchDelay = 500, providerConfig = { provider: 'openai' }, onProgress = null) {
   if (!characters) {
     return characters;
   }
 
   if (Array.isArray(characters)) {
     const result = [];
-    for (const character of characters) {
-      result.push(await translateCharacterData(character, sourceLang, targetLang, providerConfig));
+    const total = characters.length;
+    for (let i = 0; i < total; i++) {
+      onProgress?.({ step: i + 1, total, label: characters[i]?.name || `Personaje ${i + 1}` });
+      result.push(await translateCharacterData(characters[i], sourceLang, targetLang, providerConfig));
       await sleep(batchDelay);
     }
     return result;
   }
 
+  onProgress?.({ step: 1, total: 1, label: characters?.name || 'Personaje' });
   return translateCharacterData(characters, sourceLang, targetLang, providerConfig);
 }
 
@@ -201,7 +204,7 @@ export async function loadLorebookById(name) {
  * @param {object} providerConfig
  * @returns {Promise<object>} Lorebook traducido (entries como array)
  */
-export async function translateLorebook(book, sourceLang = 'auto', targetLang = 'es', batchDelay = 500, providerConfig = { provider: 'openai' }) {
+export async function translateLorebook(book, sourceLang = 'auto', targetLang = 'es', batchDelay = 500, providerConfig = { provider: 'openai' }, onProgress = null) {
   if (!book) {
     return book;
   }
@@ -211,7 +214,11 @@ export async function translateLorebook(book, sourceLang = 'auto', targetLang = 
     : Object.values(book.entries ?? {});
 
   const outEntries = [];
-  for (const entry of entries) {
+  const total = entries.length;
+  for (let i = 0; i < total; i++) {
+    const entry = entries[i];
+    const label = entry?.comment || entry?.key?.[0] || `Entrada ${i + 1}`;
+    onProgress?.({ step: i + 1, total, label });
     const copy = { ...entry };
     for (const field of ['content', 'key', 'comment']) {
       const value = copy[field];

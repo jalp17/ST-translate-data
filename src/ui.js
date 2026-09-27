@@ -427,6 +427,37 @@ export function attachTranslatorSettingsEvents() {
     }
   }
 
+  /**
+   * Ejecuta fn con la UI en estado "ocupado": bloquea el botón, actualiza la
+   * barra de progreso N/M, y garantiza restaurar el estado al terminar.
+   *
+   * @param {HTMLButtonElement} button Botón a bloquear durante la tarea
+   * @param {{ title?: string }} opts Etiqueta base para el mensaje
+   * @param {(progress: (info: {step:number,total:number,label:string}) => void) => Promise<any>} fn
+   */
+  async function withBusyButton(button, opts, fn) {
+    const originalHtml = button.innerHTML;
+    const title = opts?.title || 'Procesando';
+
+    button.disabled = true;
+    button.classList.add('sttd-processing');
+    button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${title}…`;
+
+    const progress = ({ step, total, label }) => {
+      const pct = Math.max(5, Math.round((step / total) * 100));
+      updateProgress(pct, `${title}: ${step}/${total} — ${label}`);
+    };
+
+    try {
+      const result = await fn(progress);
+      return result;
+    } finally {
+      button.disabled = false;
+      button.classList.remove('sttd-processing');
+      button.innerHTML = originalHtml;
+    }
+  }
+
   function normalizeProfile(profile) {
     if (!profile || typeof profile !== 'object') {
       return null;
@@ -932,13 +963,51 @@ export function attachTranslatorSettingsEvents() {
     populateApiKeyProfiles([]);
   });
 
-  translatePngButton.addEventListener('click', async () => {
+  /**
+   * Envuelve un handler de traducción: deshabilita los botones de acción,
+   * sustituye el label por "Procesando...", muestra un spinner en la barra
+   * y restaura al terminar (éxito o error).
+   */
+  function withBusyState(button, busyLabel, handler) {
+    return async (event) => {
+      if (button.dataset.busy === 'true') {
+        return; // ya hay una traducción en curso
+      }
+      const allButtons = [translatePngButton, translateLorebookButton, translateSelectedCharactersButton].filter(Boolean);
+      const originalLabel = button.innerHTML;
+
+      button.dataset.busy = 'true';
+      allButtons.forEach((b) => { b.disabled = true; });
+      button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${busyLabel}`;
+      updateProgress(5, busyLabel);
+
+      try {
+        await handler(event);
+      } finally {
+        delete button.dataset.busy;
+        allButtons.forEach((b) => { b.disabled = false; });
+        button.innerHTML = originalLabel;
+      }
+    };
+  }
+
+  /**
+   * Actualiza la barra durante un bucle: el 10-90% se reparte entre los ítems.
+   */
+  function makeProgressCallback(total, detailLabel) {
+    return ({ step, total: t, label }) => {
+      const pct = Math.min(90, Math.max(10, Math.round(10 + ((step / (t || total || 1)) * 80))));
+      const name = label ? ` — ${label}` : '';
+      updateProgress(pct, `${detailLabel} ${step}/${t || total || 1}${name}...`);
+    };
+  }
+
+  translatePngButton.addEventListener('click', withBusyState(translatePngButton, 'Traduciendo imágenes...', async () => {
     if (!selectedFiles.length) {
       statusText.textContent = 'Seleccione primero uno o varios PNG válidos.';
+      updateProgress(0);
       return;
     }
-
-    updateProgress(10, 'Preparando traducción...');
 
     try {
       const providerConfig = validateProviderConfig(buildProviderConfig());
@@ -946,6 +1015,7 @@ export function attachTranslatorSettingsEvents() {
       if (selectedFiles.length === 1) {
         const file = selectedFiles[0];
         console.debug('ST Translator: single PNG translation', file.name, providerConfig);
+        updateProgress(30, `Traduciendo ${file.name}...`);
         const translatedBlob = await window.STUniversalTranslator.translateCharacterCard(
           file,
           sourceLangSelect.value,
@@ -967,7 +1037,8 @@ export function attachTranslatorSettingsEvents() {
           targetLangSelect.value,
           outputFolderInput.value.trim(),
           providerConfig,
-          Number(batchDelayInput.value || 500)
+          Number(batchDelayInput.value || 500),
+          makeProgressCallback(selectedFiles.length, 'Traduciendo imagen')
         );
         statusText.textContent = `Traducción de lote completada (${results.length} imágenes).`;
         updateProgress(100);
@@ -975,10 +1046,10 @@ export function attachTranslatorSettingsEvents() {
     } catch (error) {
       handleTranslationError(error, 'Error durante la traducción de imágenes.');
     }
-  });
+  }));
 
-  translateLorebookButton.addEventListener('click', async () => {
-    updateProgress(5, 'Iniciando traducción de lorebook...');
+  translateLorebookButton.addEventListener('click', withBusyState(translateLorebookButton, 'Traduciendo lorebook...', async () => {
+    updateProgress(5, 'Cargando lorebook...');
     const selectedLorebookId = lorebookSelect.value;
     if (!selectedLorebookId) {
       statusText.textContent = 'Seleccione un lorebook de la lista.';
@@ -1002,7 +1073,8 @@ export function attachTranslatorSettingsEvents() {
         sourceLangSelect.value,
         targetLangSelect.value,
         Number(batchDelayInput.value || 500),
-        providerConfig
+        providerConfig,
+        makeProgressCallback(book.entries?.length ?? 1, 'Entrada')
       );
 
       const blob = new Blob([JSON.stringify({ entries: translatedLorebook.entries }, null, 2)], { type: 'application/json' });
@@ -1018,10 +1090,10 @@ export function attachTranslatorSettingsEvents() {
     } catch (error) {
       handleTranslationError(error, 'Error durante la traducción del lorebook.');
     }
-  });
+  }));
 
-  translateSelectedCharactersButton.addEventListener('click', async () => {
-    updateProgress(5, 'Iniciando traducción de personajes seleccionados...');
+  translateSelectedCharactersButton.addEventListener('click', withBusyState(translateSelectedCharactersButton, 'Traduciendo personajes...', async () => {
+    updateProgress(5, 'Preparando personajes seleccionados...');
 
     const selectedIds = Array.from(characterBatchSelect.selectedOptions).map((option) => option.value);
     if (!selectedIds.length) {
@@ -1049,7 +1121,8 @@ export function attachTranslatorSettingsEvents() {
         sourceLangSelect.value,
         targetLangSelect.value,
         Number(batchDelayInput.value || 500),
-        providerConfig
+        providerConfig,
+        makeProgressCallback(selectedItems.length, 'Personaje')
       );
 
       // SillyTavern no expone setCurrentCharacter(s): descargar como JSON para importación manual
@@ -1070,7 +1143,7 @@ export function attachTranslatorSettingsEvents() {
     } catch (error) {
       handleTranslationError(error, 'Error durante la traducción de personajes seleccionados.');
     }
-  });
+  }));
 
   setupDragAndDrop(pngBatchDropZone, pngBatchInput, (files) => {
     selectedFiles = files;

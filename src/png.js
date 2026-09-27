@@ -189,13 +189,16 @@ export async function translateCharacterCard(file, sourceLang = 'auto', targetLa
   return new Blob([translatedArrayBuffer], { type: 'image/png' });
 }
 
-export async function translateImageBatch(files, sourceLang = 'auto', targetLang = 'es', outputFolder = '', providerConfig = { provider: 'openai' }, batchDelay = 500) {
+export async function translateImageBatch(files, sourceLang = 'auto', targetLang = 'es', outputFolder = '', providerConfig = { provider: 'openai' }, batchDelay = 500, onProgress = null) {
   if (!files || !files.length) {
     return [];
   }
 
   const results = [];
-  for (const file of files) {
+  const total = files.length;
+  for (let i = 0; i < total; i++) {
+    const file = files[i];
+    onProgress?.({ step: i + 1, total, label: file.name || `imagen-${i + 1}` });
     const translatedBlob = await translateCharacterCard(file, sourceLang, targetLang, providerConfig);
     const filename = file.name || `translated-${Date.now()}.png`;
     const saveInfo = await window.STUniversalTranslator.saveBlobToDisk(translatedBlob, filename, outputFolder);

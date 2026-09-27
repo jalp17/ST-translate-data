@@ -148,20 +148,37 @@ export class TipsyProvider extends CharacterProvider {
   }
 
   toCardFields(raw) {
-    const avatar = raw.image_url || raw.image || raw.animated_image_url || null;
+    // Yusuke tras comprobar el endpoint real: el `character` interno tiene keys:
+    // nickname, introduction (resumen), greeting (primer mensaje), image_url (absoluta ya)
+    // o face_url (avatar alternativo), tags[], gender, nsfw, etc.
+    const avatar = raw.image_url || raw.face_url || raw.animated_image_url || null;
+    const tags = Array.isArray(raw.tags)
+      ? raw.tags.map((t) => (typeof t === 'string' ? t : (t?.desc || t?.alias || t?.name))).filter(Boolean)
+      : [];
     return {
       name: raw.nickname || raw.name || 'Tipsy character',
-      description: raw.description || '',
-      personality: raw.personality || '',
-      scenario: raw.scenario || '',
-      first_mes: raw.first_message || raw.first_mes || '',
-      mes_example: raw.example_dialogue || raw.msg_example || '',
-      tags: Array.isArray(raw.tags) ? raw.tags.map((t) => (typeof t === 'string' ? t : t?.name)).filter(Boolean) : [],
+      description: stripInlineImagesInTipsy(raw.introduction || raw.description || ''),
+      personality: Array.isArray(raw.personality) ? raw.personality.filter(Boolean).join(', ') : (raw.personality || ''),
+      scenario: stripInlineImagesInTipsy(raw.scenario || ''),
+      first_mes: stripInlineImagesInTipsy(raw.greeting || raw.first_message || ''),
+      mes_example: stripInlineImagesInTipsy(raw.example_dialogue || raw.dialog_example || ''),
+      tags,
       creator: raw.creator_name || raw.author_name || '',
+      // image_url ya viene absoluta en la API real — sin prefijo
       avatarUrl: avatar && !/^https?:/i.test(avatar) ? `https://img.tipsy.chat/${avatar.replace(/^\//, '')}` : avatar,
       backgroundUrls: [],
+      tipsyMeta: {
+        gender: raw.gender || null,
+        nsfw: raw.nsfw ?? false,
+        language: raw.lang || null,
+        conversation_style: raw.conversation_style ?? null,
+      },
     };
   }
+}
+
+function stripInlineImagesInTipsy(s) {
+  return (s || '').replace(/!\[[^\]]*\]\(https?:[^)]+\)/g, '').trim();
 }
 
 /**

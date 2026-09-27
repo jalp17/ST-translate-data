@@ -1,4 +1,5 @@
 import { parsePNGChunks, buildPNG, buildTextChunkBytes } from './png.js';
+import { juicyEncrypt, juicyDecrypt, JUICYCHAT_SECRET_KEY } from './juicychatCrypto.js';
 
 /**
  * Importación de tarjetas de personaje desde sitios de roleplay IA por URL.
@@ -162,7 +163,109 @@ export class TipsyProvider extends CharacterProvider {
   }
 }
 
-export const PROVIDERS = [new MoescapeProvider(), new TipsyProvider()];
+/**
+ * JuicyChat cifra todas sus llamadas API con AES-128-CBC + doble Base64.
+ * Los valores (key "yume1aJ83ZbPpkwb", IV "yume2024cccydnzc", header
+ * secretkey) están hardcodeados en la app oficial publicada; ver
+ * `juicychatCrypto.js` para detalles.
+ *
+ * Endpoints relevantes (descifrados del traffic dump en evidencia/):
+ * - POST /yume/api/user/v1/character/getCharacterDetail
+ *     Request: {"requestData": encrypt({"characterId":"..."})}
+ *     Response: {"responseData": encrypt({"code":"200","data":{...}})}
+ * - Imágenes: characterThumb (.jpeg siempre) o characterPhoto (.gif/.webp).
+ *   characterThumb es la opción consistente para el avatar.
+ */
+export class JuicyChatProvider extends CharacterProvider {
+  constructor() {
+    super('juicychat');
+  }
+
+  canHandle(url) {
+    return /(^|\.)juicychat\.ai$/i.test(new URL(url).hostname) && this.extractId(url) !== null;
+  }
+
+  extractId(url) {
+    // URLs tipo: /es/chat/2072087837881249794, /chat/2072087837881249794, /character/...
+    const m = String(url).match(/\/(?:chat|character)\/(\d{6,})/i);
+    if (m) return m[1];
+    // Fallback: cualquier secuencia larga de dígitos (p.ej. query string)
+    return String(url).match(/(\d{15,})/)?.[1] ?? null;
+  }
+
+  async fetchRaw(characterId) {
+    const { juicyEncrypt, juicyDecrypt, JUICYCHAT_SECRET_KEY } = await import('./juicychatCrypto.js');
+
+    // El sitio valida un conjunto de headers anti-bot; replicamos los que
+    // manda la web oficial (capturados del mitm de la propia app web).
+    const body = JSON.stringify({
+      requestData: await juicyEncrypt(JSON.stringify({ characterId: String(characterId) })),
+    });
+
+    const response = await fetch('https://www.juicychat.ai/yume/api/user/v1/character/getCharacterDetail', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/plain, */*',
+        'secretkey': JUICYCHAT_SECRET_KEY,
+        'appversion': '0.1.38',
+        'client': 'pc',
+        'platformtype': 'web',
+        'system': 'other',
+        'language': 'es'
+      },
+      body,
+    });
+
+    if (!response.ok) {
+      throw new Error(`JuicyChat respondió ${response.status} para el personaje ${characterId}`);
+    }
+
+    const payload = await response.json();
+    if (!payload?.responseData) {
+      throw new Error('JuicyChat: respuesta sin responseData (¿cambió el formato de cifrado?)');
+    }
+
+    const plainText = await juicyDecrypt(payload.responseData);
+    const inner = JSON.parse(plainText);
+    if (String(inner?.code) !== '200' || !inner?.data) {
+      throw new Error(`JuicyChat: error en response de CharacterDetail: ${inner?.msg || 'sin datos'}`);
+    }
+
+    return inner.data;
+  }
+
+  toCardFields(raw) {
+    const personality = Array.isArray(raw.personality)
+      ? raw.personality.filter(Boolean).join(', ')
+      : (raw.personality || '');
+
+    // La greeting/introduction pueden llevar markdown ![](url) para previews
+    // inline del sitio; SillyTavern no las sirve (CORS). Se quitan.
+    const stripInlineImages = (s) => (s || '').replace(/!\[[^\]]*\]\(https?:[^)]+\)/g, '').trim();
+
+    const desc = stripInlineImages(raw.introduction || raw.description || '');
+
+    return {
+      name: raw.characterName || raw.nickname || 'JuicyChat character',
+      description: desc,
+      personality,
+      scenario: stripInlineImages(raw.scenario || ''),
+      first_mes: stripInlineImages(raw.greeting || raw.firstMessage || ''),
+      mes_example: stripInlineImages(raw.exampleConversation?.[0] || ''),
+      tags: Array.isArray(raw.characterTags) ? raw.characterTags : [],
+      creator: raw.characterUserInfo?.userName || raw.userName || '',
+      // preferir thumb: siempre JPEG estático (characterPhoto a veces es GIF)
+      avatarUrl: raw.characterThumb || raw.characterPhoto || null,
+      backgroundUrls: [raw.characterPhoto, raw.characterThumb].filter(
+        (u, i, a) => u && a.indexOf(u) === i
+      ),
+    };
+  }
+}
+
+export const PROVIDERS = [new MoescapeProvider(), new TipsyProvider(), new JuicyChatProvider()];
 
 /**
  * Devuelve el primer proveedor que reconoce la URL.

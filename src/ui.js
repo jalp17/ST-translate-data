@@ -1171,7 +1171,7 @@ export function attachTranslatorSettingsEvents() {
 
         updateProgress(20, 'Obteniendo datos del personaje...');
         const result = await window.STUniversalTranslator.importCharacterFromUrl(url, { rawJson });
-        const { card, avatarUrl } = result;
+        const { card, avatarUrl, backgroundUrls = [] } = result;
 
         if (!avatarUrl) {
           // Sin avatar: ofrecer el JSON de la tarjeta directamente
@@ -1198,12 +1198,12 @@ export function attachTranslatorSettingsEvents() {
         }
         const imageBlob = await imageResponse.blob();
 
-        updateProgress(85, 'Construyendo PNG con la tarjeta...');
+        updateProgress(75, 'Construyendo PNG con la tarjeta...');
         const { buildCharacterCardPng } = await import('./characterImporter.js');
         const pngBlob = await buildCharacterCardPng(imageBlob, card);
         const filename = `${card.data.name.replace(/[/\\?%*:|"<>]/g, '_')}.png`;
 
-        updateProgress(95, 'Guardando tarjeta...');
+        updateProgress(85, 'Guardando tarjeta...');
         const saveInfo = await window.STUniversalTranslator.saveBlobToDisk(
           pngBlob,
           filename,
@@ -1218,8 +1218,44 @@ export function attachTranslatorSettingsEvents() {
         link.click();
         URL.revokeObjectURL(objUrl);
 
-        const sizeKb = Math.round(pngBlob.size / 1024);
-        statusText.textContent = `Tarjeta "${card.data.name}" creada (${sizeKb} KB)${saveInfo?.saved ? ` y guardada en ${saveInfo.path}` : ' y descargada'}. Impórtala en SillyTavern como tarjeta PNG.`;
+        // Galería: descargar las imágenes adicionales (desbloqueadas) una a una,
+        // con un pequeño delay para no saturar el origen / el navegador.
+        const backgroundList = (backgroundUrls ?? []).filter((u) => u && u !== avatarUrl);
+        const galleryInfo = result.galleryInfo ?? null;
+
+        if (backgroundList.length > 0) {
+          updateProgress(90, `Descargando ${backgroundList.length} imágenes de galería...`);
+          let galleryDownloaded = 0;
+          for (let i = 0; i < backgroundList.length; i++) {
+            const imgUrl = backgroundList[i];
+            try {
+              const r = await fetch(imgUrl);
+              if (!r.ok) continue;
+              const b = await r.blob();
+              const ext = (imgUrl.split('?')[0].split('.').pop() || 'png').slice(0, 5);
+              const base = card.data.name.replace(/[/\\?%*:|"<>]/g, '_');
+              const galleryName = `${base}_gallery-${i + 1}.${ext}`;
+              const objU = URL.createObjectURL(b);
+              const l = document.createElement('a');
+              l.href = objU;
+              l.download = galleryName;
+              l.click();
+              URL.revokeObjectURL(objU);
+              galleryDownloaded++;
+              await new Promise((res) => setTimeout(res, 350));
+            } catch (err) {
+              console.warn('ST Translator: no se pudo descargar imagen de galería', imgUrl, err);
+            }
+          }
+          if (galleryInfo) {
+            statusText.textContent = `Tarjeta "${card.data.name}" creada. Galería: ${galleryInfo.unlockedCount} descargadas, ${galleryInfo.lockedCount} bloqueadas por gems.`;
+          } else {
+            statusText.textContent = `Tarjeta "${card.data.name}" creada. ${galleryDownloaded} imágenes de galería descargadas.`;
+          }
+        } else {
+          const sizeKb = Math.round(pngBlob.size / 1024);
+          statusText.textContent = `Tarjeta "${card.data.name}" creada (${sizeKb} KB)${saveInfo?.saved ? ` y guardada en ${saveInfo.path}` : ' y descargada'}.${galleryInfo && galleryInfo.lockedCount > 0 ? ` ${galleryInfo.lockedCount} imágenes de galería están bloqueadas (requieren gems).` : ''}`;
+        }
         updateProgress(100);
       } catch (error) {
         handleTranslationError(error, 'Error al importar el personaje desde URL.');

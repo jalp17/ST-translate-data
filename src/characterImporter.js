@@ -66,11 +66,12 @@ export class CharacterProvider {
           tags: ['ideas', ...(f.tags || [])],
           creator: f.creator || '',
           character_version: '1.0',
-          extensions: { source_url: url, source_service: this.name },
+          extensions: { source_url: url, source_service: this.name, gallery: f.galleryInfo ?? null },
         },
       },
       avatarUrl: f.avatarUrl || null,
       backgroundUrls: f.backgroundUrls || [],
+      galleryInfo: f.galleryInfo ?? null,
     };
   }
 }
@@ -196,44 +197,50 @@ export class JuicyChatProvider extends CharacterProvider {
   async fetchRaw(characterId) {
     const { juicyEncrypt, juicyDecrypt, JUICYCHAT_SECRET_KEY } = await import('./juicychatCrypto.js');
 
-    // El sitio valida un conjunto de headers anti-bot; replicamos los que
-    // manda la web oficial (capturados del mitm de la propia app web).
-    const body = JSON.stringify({
-      requestData: await juicyEncrypt(JSON.stringify({ characterId: String(characterId) })),
-    });
+    const postEncrypted = async (path, bodyObj) => {
+      const body = JSON.stringify({
+        requestData: await juicyEncrypt(JSON.stringify(bodyObj)),
+      });
+      const response = await fetch(`https://www.juicychat.ai${path}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/plain, */*',
+          'secretkey': JUICYCHAT_SECRET_KEY,
+          'appversion': '0.1.38',
+          'client': 'pc',
+          'platformtype': 'web',
+          'system': 'other',
+          'language': 'es'
+        },
+        body,
+      });
+      if (!response.ok) {
+        throw new Error(`JuicyChat ${path} respondió ${response.status}`);
+      }
+      const payload = await response.json();
+      if (!payload?.responseData) {
+        throw new Error(`JuicyChat ${path}: respuesta sin responseData`);
+      }
+      const inner = JSON.parse(await juicyDecrypt(payload.responseData));
+      if (String(inner?.code) !== '200') {
+        throw new Error(`JuicyChat ${path}: ${inner?.msg || 'sin datos'}`);
+      }
+      return inner.data;
+    };
 
-    const response = await fetch('https://www.juicychat.ai/yume/api/user/v1/character/getCharacterDetail', {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json, text/plain, */*',
-        'secretkey': JUICYCHAT_SECRET_KEY,
-        'appversion': '0.1.38',
-        'client': 'pc',
-        'platformtype': 'web',
-        'system': 'other',
-        'language': 'es'
-      },
-      body,
-    });
+    const detail = await postEncrypted('/yume/api/user/v1/character/getCharacterDetail', { characterId: String(characterId) });
 
-    if (!response.ok) {
-      throw new Error(`JuicyChat respondió ${response.status} para el personaje ${characterId}`);
+    // Galería completa (albumList + galleryList) — opcional si falla
+    let gallery = null;
+    try {
+      gallery = await postEncrypted('/yume/api/user/v1/character/picture/getCharacterPictureData', { characterId: String(characterId) });
+    } catch (err) {
+      console.warn('JuicyChat: no se pudo cargar la galería (opcional)', err);
     }
 
-    const payload = await response.json();
-    if (!payload?.responseData) {
-      throw new Error('JuicyChat: respuesta sin responseData (¿cambió el formato de cifrado?)');
-    }
-
-    const plainText = await juicyDecrypt(payload.responseData);
-    const inner = JSON.parse(plainText);
-    if (String(inner?.code) !== '200' || !inner?.data) {
-      throw new Error(`JuicyChat: error en response de CharacterDetail: ${inner?.msg || 'sin datos'}`);
-    }
-
-    return inner.data;
+    return { ...detail, _gallery: gallery };
   }
 
   toCardFields(raw) {
@@ -247,6 +254,14 @@ export class JuicyChatProvider extends CharacterProvider {
 
     const desc = stripInlineImages(raw.introduction || raw.description || '');
 
+    // Galería: solo incluir las desbloqueadas (clearPictureUrl); blur queda fuera
+    const albumUnlocked = (raw._gallery?.albumList ?? []).filter((i) => i?.clearPictureUrl);
+    const albumUrls = albumUnlocked.map((i) => i.clearPictureUrl);
+    const galleryCovers = (raw._gallery?.galleryList ?? [])
+      .map((g) => g?.coverUrl ?? null)
+      .filter(Boolean);
+    const lockedCount = (raw._gallery?.albumList ?? []).length - albumUnlocked.length;
+
     return {
       name: raw.characterName || raw.nickname || 'JuicyChat character',
       description: desc,
@@ -258,9 +273,14 @@ export class JuicyChatProvider extends CharacterProvider {
       creator: raw.characterUserInfo?.userName || raw.userName || '',
       // preferir thumb: siempre JPEG estático (characterPhoto a veces es GIF)
       avatarUrl: raw.characterThumb || raw.characterPhoto || null,
-      backgroundUrls: [raw.characterPhoto, raw.characterThumb].filter(
-        (u, i, a) => u && a.indexOf(u) === i
-      ),
+      backgroundUrls: [raw.characterPhoto, raw.characterThumb, ...albumUrls, ...galleryCovers]
+        .filter((u, i, a) => u && a.indexOf(u) === i),
+      galleryInfo: {
+        albumCount: (raw._gallery?.albumList ?? []).length,
+        galleryCount: (raw._gallery?.galleryList ?? []).length,
+        unlockedCount: albumUrls.length,
+        lockedCount,
+      },
     };
   }
 }

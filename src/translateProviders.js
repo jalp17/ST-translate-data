@@ -36,9 +36,26 @@ export const SUPPORTED_TRANSLATION_PROVIDERS = [
 ];
 
 /**
+ * Mapeo de proveedores de la extensión a chat_completion_source de ST.
+ * Cuando el usuario no rellena API key, enrutamos por el backend de ST que
+ * resuelve la key guardada server-side (secrets.json). Así las keys de
+ * ElectronHub / OpenRouter / etc. se reutilizan sin duplicarlas.
+ */
+export const PROVIDER_TO_ST_SOURCE = {
+  openai: 'openai',
+  openrouter: 'openrouter',
+  electron_hub: 'electronhub',
+  google_aistudio: 'makersuite',
+};
+
+/**
  * Traduce usando el backend de SillyTavern (generateQuietPrompt).
  * Usa la conexión/API key configurada en ST — las credenciales nunca salen del servidor.
  * Esto arregla el problema de CORS y de API keys inaccesibles desde el navegador.
+ *
+ * Fallback: si generateQuietPrompt falla, intenta el proxy
+ * /api/backends/chat-completions/generate con la configuración del chat_completion_source
+ * actual de ST.
  */
 export async function translateWithSTBackend(text, sourceLang, targetLang) {
   const prompt = buildTranslatePrompt(text, sourceLang, targetLang);
@@ -46,11 +63,73 @@ export async function translateWithSTBackend(text, sourceLang, targetLang) {
   if (!ctx?.generateQuietPrompt) {
     throw new Error('Backend de SillyTavern no disponible. Usa otro proveedor o recarga ST completamente.');
   }
-  const result = await ctx.generateQuietPrompt({ quietPrompt: prompt });
-  if (typeof result !== 'string' || !result.trim()) {
-    throw new Error('ST backend devolvió una respuesta vacía.');
+
+  // Vía principal: generateQuietPrompt usa la conexión activa (textgen o chat)
+  try {
+    const result = await ctx.generateQuietPrompt({ quietPrompt: prompt });
+    if (typeof result === 'string' && result.trim()) {
+      return result.trim();
+    }
+    console.warn('ST Translator: generateQuietPrompt devolvió vacío, probando proxy directo');
+  } catch (err) {
+    console.warn('ST Translator: generateQuietPrompt falló, probando proxy directo', err);
   }
-  return result.trim();
+
+  // Fallback: llamar al endpoint de chat-completions del backend ST con el
+  // chat_completion_source configurado actualmente (el servidor resuelve la key).
+  const chatSource = ctx.chatCompletionSettings?.chat_completion_source;
+  const model = ctx.getChatCompletionModel?.();
+  if (!chatSource || !model) {
+    throw new Error('No hay conexión de chat configurada en SillyTavern.');
+  }
+
+  return translateViaSTChatProxy(text, sourceLang, targetLang, chatSource, model);
+}
+
+/**
+ * Llama al endpoint /api/backends/chat-completions/generate del servidor de ST.
+ * El servidor resuelve la credencial desde secrets.json (secret activo).
+ * No hay CORS: es same-origin.
+ *
+ * @param {string} chatCompletionSource e.g. 'openai', 'openrouter', 'electronhub'
+ * @param {string} model
+ */
+export async function translateViaSTChatProxy(text, sourceLang, targetLang, chatCompletionSource, model) {
+  const prompt = buildTranslatePrompt(text, sourceLang, targetLang);
+  const ctx = globalThis.SillyTavern?.getContext?.();
+  if (!ctx?.getRequestHeaders) {
+    throw new Error('Contexto de SillyTavern no disponible.');
+  }
+
+  const body = {
+    messages: [
+      { role: 'system', content: 'Eres un traductor preciso. Conserva literales y placeholders sin cambiarlos.' },
+      { role: 'user', content: prompt },
+    ],
+    model,
+    chat_completion_source: chatCompletionSource,
+    stream: false,
+  };
+
+  const response = await fetch('/api/backends/chat-completions/generate', {
+    method: 'POST',
+    headers: ctx.getRequestHeaders(),
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Error del backend de SillyTavern (${response.status}): ${errText.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  // El endpoint devuelve el JSON de la API upstream directamente (formato OpenAI chat)
+  if (data?.choices?.length) {
+    const msg = data.choices[0];
+    if (msg.message?.content) return msg.message.content.trim();
+    if (typeof msg.text === 'string') return msg.text.trim();
+  }
+  throw new Error('Respuesta inválida del backend de SillyTavern.');
 }
 
 /**
@@ -82,6 +161,20 @@ export async function translateWithSTConnectionProfile(profileId, text, sourceLa
 
 export async function translateText(text, sourceLang, targetLang, providerConfig = { provider: DEFAULT_TRANSLATION_PROVIDER }) {
   const provider = providerConfig.provider || DEFAULT_TRANSLATION_PROVIDER;
+
+  // Proveedor con key guardada en ST pero sin escribirse en el campo:
+  // rutar por el backend de ST que la resuelve server-side (sin CORS, sin
+  // exponer la key al navegador).
+  if (PROVIDER_TO_ST_SOURCE[provider] && !providerConfig.apiKey) {
+    const ctx = globalThis.SillyTavern?.getContext?.();
+    if (ctx?.getRequestHeaders) {
+      const model = providerConfig.model || ctx.getChatCompletionModel?.();
+      if (model) {
+        return translateViaSTChatProxy(text, sourceLang, targetLang, PROVIDER_TO_ST_SOURCE[provider], model);
+      }
+    }
+    // Si no hay contexto ST, caemos al provider directo (fallará con CORS, pero al menos probamos)
+  }
 
   switch (provider) {
     case 'st_backend':
@@ -432,6 +525,46 @@ const PROVIDER_MODEL_ENDPOINTS = {
  * @param {{ apiKey?: string, apiUrl?: string }} opts
  * @returns {Promise<string[]>}
  */
+/**
+ * Pide la lista de modelos al backend de ST (`/api/backends/chat-completions/status`)
+ * para un chat_completion_source dado. El servidor resuelve la API key guardada
+ * (secrets.json) — no hace falta duplicar la key en el navegador.
+ *
+ * @param {string} chatCompletionSource e.g. 'openai', 'openrouter', 'electronhub'
+ * @returns {Promise<string[]>}
+ */
+export async function fetchModelsViaSTBackend(chatCompletionSource) {
+  const ctx = globalThis.SillyTavern?.getContext?.();
+  if (!ctx?.getRequestHeaders) {
+    return [];
+  }
+
+  try {
+    const response = await fetch('/api/backends/chat-completions/status', {
+      method: 'POST',
+      headers: ctx.getRequestHeaders(),
+      body: JSON.stringify({ chat_completion_source: chatCompletionSource }),
+      cache: 'no-cache',
+    });
+    if (!response.ok) {
+      return [];
+    }
+    const data = await response.json();
+    // El backend devuelve { data: [{id: 'modelo', ...}], ... } en formato OpenAI
+    if (Array.isArray(data?.data)) {
+      return data.data.map((m) => m.id ?? m.name).filter(Boolean);
+    }
+    // Algunos backends devuelven { models: [...] }
+    if (Array.isArray(data?.models)) {
+      return data.models.map((m) => (typeof m === 'string' ? m : m.id ?? m.name)).filter(Boolean);
+    }
+    return [];
+  } catch (err) {
+    console.warn(`fetchModelsViaSTBackend: ${chatCompletionSource}`, err);
+    return [];
+  }
+}
+
 export async function getModelsForProvider(provider, { apiKey, apiUrl } = {}) {
   const cached = readModelsCache(provider);
   if (cached) {
@@ -448,6 +581,18 @@ export async function getModelsForProvider(provider, { apiKey, apiUrl } = {}) {
   let models = [];
 
   try {
+    // Sin key en el campo: usar el backend de ST que resuelve la key
+    // guardada (secrets.json) server-side. Evita CORS y duplicar keys.
+    if (!apiKey && PROVIDER_TO_ST_SOURCE[provider]) {
+      const stModels = await fetchModelsViaSTBackend(PROVIDER_TO_ST_SOURCE[provider]);
+      if (stModels.length) {
+        models = stModels;
+        writeModelsCache(provider, models);
+        return models;
+      }
+      // Si el backend no devuelve nada, caemos al endpoint directo
+    }
+
     const headers = endpoint.buildHeaders
       ? endpoint.buildHeaders(apiKey)
       : ['openai', 'openrouter', 'local_koboldcpp', 'llama_cpp', 'llm_studio', 'electron_hub'].includes(provider)

@@ -151,6 +151,48 @@
       </div>
 
       <div class="sttd-section-card">
+        <div class="sttd-section-title"><i class="fa-solid fa-link"></i> Importar desde URL</div>
+        <div class="sttd-form-grid">
+          <div class="sttd-full-width">
+            <label for="characterUrlInput">URL del personaje</label>
+            <input id="characterUrlInput" class="sttd-input" type="text" placeholder="https://moescape.ai/tavern/characters/… o https://tipsy.chat/character/…" />
+            <div class="sttd-hint">Sitios soportados: moescape.ai, tipsy.chat.</div>
+          </div>
+
+          <div class="sttd-full-width">
+            <label for="characterJsonInput">JSON alternativo (si el sitio bloquea CORS)</label>
+            <textarea id="characterJsonInput" class="sttd-input" rows="4" placeholder='Pega aquí el JSON crudo del endpoint del personaje (DevTools del sitio → pestaña Red). Si está relleno, se usa en lugar del fetch.'></textarea>
+          </div>
+        </div>
+        <div class="button-row">
+          <button id="importUrlButton" type="button" class="sttd-button primary">
+            <i class="fa-solid fa-file-import"></i> Importar desde URL
+          </button>
+        </div>
+        <div id="importUrlStatusText" class="sttd-hint"></div>
+      </div>
+
+      <div class="sttd-section-card">
+        <div class="sttd-section-title"><i class="fa-solid fa-link"></i> Importar desde URL</div>
+        <div class="sttd-form-grid">
+          <div class="sttd-full-width">
+            <label for="characterUrlInput">URL del personaje</label>
+            <input id="characterUrlInput" class="sttd-input" type="text" placeholder="https://moescape.ai/tavern/characters/... o https://tipsy.chat/character/..." />
+            <div class="sttd-hint">Sitios soportados: moescape.ai, tipsy.chat</div>
+          </div>
+          <div class="sttd-full-width">
+            <label for="characterJsonInput">JSON alternativo (si el sitio bloquea CORS)</label>
+            <textarea id="characterJsonInput" class="sttd-input" rows="4" placeholder="Pega aquí el JSON del endpoint de la API del sitio (DevTools → Network) para saltarte el bloqueo CORS"></textarea>
+          </div>
+        </div>
+        <div class="button-row">
+          <button id="importUrlButton" type="button" class="sttd-button primary">
+            <i class="fa-solid fa-cloud-arrow-down"></i> Importar desde URL
+          </button>
+        </div>
+      </div>
+
+      <div class="sttd-section-card">
         <div class="sttd-section-title"><i class="fa-solid fa-file-image"></i> Importar imágenes</div>
         <div class="sttd-form-grid">
           <div class="sttd-full-width">

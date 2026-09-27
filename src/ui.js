@@ -1,4 +1,5 @@
 import { DEFAULT_ENDPOINTS, getModelsForProvider } from './translateProviders.js';
+import { importCharacterFromUrl, buildCharacterCardPng } from './characterImporter.js';
 import { populateForm, bindAutoSave } from './ui/settings.js';
 
 export { populateForm, bindAutoSave } from './ui/settings.js';
@@ -134,6 +135,9 @@ export function attachTranslatorSettingsEvents() {
   const lorebookSelect = document.getElementById('lorebookSelect');
   const refreshLorebookListButton = document.getElementById('refreshLorebookListButton');
   const lorebookStatusText = document.getElementById('lorebookStatusText');
+  const characterUrlInput = document.getElementById('characterUrlInput');
+  const characterJsonInput = document.getElementById('characterJsonInput');
+  const importUrlButton = document.getElementById('importUrlButton');
 
   if (!pngBatchInput || !pngBatchDropZone || !translatePngButton || !translateLorebookButton || !translateSelectedCharactersButton || !refreshCharacterListButton || !characterBatchSelect || !sourceLangSelect || !targetLangSelect || !providerSelect || !modelInput || !apiUrlInput || !apiKeyInput || !apiKeyLoadButton || !refreshProfilesButton || !connectionModeSelect || !useProfileProviderCheckbox || !apiKeyProfileSelect || !statusDetailsText || !progressBar || !statusText || !batchDelayInput || !lorebookSelect || !refreshLorebookListButton) {
     return;
@@ -973,7 +977,7 @@ export function attachTranslatorSettingsEvents() {
       if (button.dataset.busy === 'true') {
         return; // ya hay una traducción en curso
       }
-      const allButtons = [translatePngButton, translateLorebookButton, translateSelectedCharactersButton].filter(Boolean);
+      const allButtons = [translatePngButton, translateLorebookButton, translateSelectedCharactersButton, importUrlButton].filter(Boolean);
       const originalLabel = button.innerHTML;
 
       button.dataset.busy = 'true';
@@ -1144,6 +1148,84 @@ export function attachTranslatorSettingsEvents() {
       handleTranslationError(error, 'Error durante la traducción de personajes seleccionados.');
     }
   }));
+
+  if (importUrlButton && characterUrlInput) {
+    importUrlButton.addEventListener('click', withBusyState(importUrlButton, 'Importando desde URL...', async () => {
+      const url = characterUrlInput.value.trim();
+      const jsonText = characterJsonInput?.value.trim() || '';
+      if (!url) {
+        statusText.textContent = 'Pega primero la URL del personaje.';
+        updateProgress(0);
+        return;
+      }
+
+      try {
+        let rawJson = null;
+        if (jsonText) {
+          try {
+            rawJson = JSON.parse(jsonText);
+          } catch (parseError) {
+            throw new Error(`El JSON alternativo no es válido: ${parseError.message}`);
+          }
+        }
+
+        updateProgress(20, 'Obteniendo datos del personaje...');
+        const result = await window.STUniversalTranslator.importCharacterFromUrl(url, { rawJson });
+        const { card, avatarUrl } = result;
+
+        if (!avatarUrl) {
+          // Sin avatar: ofrecer el JSON de la tarjeta directamente
+          const blob = new Blob([JSON.stringify(card, null, 2)], { type: 'application/json' });
+          const objUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = objUrl;
+          link.download = `${card.data.name.replace(/[/\\?%*:|"<>]/g, '_')}.json`;
+          link.click();
+          URL.revokeObjectURL(objUrl);
+          updateProgress(100, `"${card.data.name}" no tiene avatar. Tarjeta JSON descargada.`);
+          return;
+        }
+
+        updateProgress(60, 'Descargando avatar...');
+        let imageResponse;
+        try {
+          imageResponse = await fetch(avatarUrl);
+        } catch (netError) {
+          throw new Error(`No se pudo descargar el avatar (posible CORS): ${netError.message}. Usa el JSON alternativo o guarda la imagen manualmente.`);
+        }
+        if (!imageResponse.ok) {
+          throw new Error(`El avatar respondió ${imageResponse.status}.`);
+        }
+        const imageBlob = await imageResponse.blob();
+
+        updateProgress(85, 'Construyendo PNG con la tarjeta...');
+        const { buildCharacterCardPng } = await import('./characterImporter.js');
+        const pngBlob = await buildCharacterCardPng(imageBlob, card);
+        const filename = `${card.data.name.replace(/[/\\?%*:|"<>]/g, '_')}.png`;
+
+        updateProgress(95, 'Guardando tarjeta...');
+        const saveInfo = await window.STUniversalTranslator.saveBlobToDisk(
+          pngBlob,
+          filename,
+          outputFolderInput?.value.trim() || ''
+        );
+
+        // Descarga adicional para el usuario (importación manual en ST)
+        const objUrl = URL.createObjectURL(pngBlob);
+        const link = document.createElement('a');
+        link.href = objUrl;
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(objUrl);
+
+        const sizeKb = Math.round(pngBlob.size / 1024);
+        statusText.textContent = `Tarjeta "${card.data.name}" creada (${sizeKb} KB)${saveInfo?.saved ? ` y guardada en ${saveInfo.path}` : ' y descargada'}. Impórtala en SillyTavern como tarjeta PNG.`;
+        updateProgress(100);
+      } catch (error) {
+        handleTranslationError(error, 'Error al importar el personaje desde URL.');
+      }
+    }));
+  }
 
   setupDragAndDrop(pngBatchDropZone, pngBatchInput, (files) => {
     selectedFiles = files;

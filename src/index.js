@@ -2,6 +2,7 @@ import * as utils from './utils.js';
 import * as providers from './translateProviders.js';
 import * as png from './png.js';
 import * as characters from './characters.js';
+import * as importer from './characterImporter.js';
 import * as ui from './ui.js';
 import * as settings from './ui/settings.js';
 
@@ -11,6 +12,8 @@ export async function initializeTranslator() {
     translateCharacterData: characters.translateCharacterData,
     translateCharacters: characters.translateCharacters,
     translateImageBatch: png.translateImageBatch,
+    importCharacterFromUrl: importer.importCharacterFromUrl,
+    buildCharacterCardPng: importer.buildCharacterCardPng,
     getAvailableCharacters: characters.getAvailableCharacters,
     searchCharacters: characters.searchCharacters,
     getAvailableLorebooks: characters.getAvailableLorebooks,

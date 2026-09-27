@@ -49,41 +49,42 @@ export const PROVIDER_TO_ST_SOURCE = {
 };
 
 /**
- * Traduce usando el backend de SillyTavern (generateQuietPrompt).
- * Usa la conexión/API key configurada en ST — las credenciales nunca salen del servidor.
- * Esto arregla el problema de CORS y de API keys inaccesibles desde el navegador.
+ * Traduce usando la conexión activa de SillyTervern.
  *
- * Fallback: si generateQuietPrompt falla, intenta el proxy
- * /api/backends/chat-completions/generate con la configuración del chat_completion_source
- * actual de ST.
+ * IMPORTANTE: NO usar generateQuietPrompt como vía principal — esa función
+ * pasa por el ensamblaje de prompt de ST e inyecta la tarjeta del personaje
+ * del chat activo (nombre, descripción, personalidad) en la petición,
+ * contaminando la traducción y exponiendo datos del chat en los logs.
+ *
+ * Vía principal: /api/backends/chat-completions/generate con la
+ * chat_completion_source actual — envía SOLO el texto a traducir.
  */
 export async function translateWithSTBackend(text, sourceLang, targetLang) {
-  const prompt = buildTranslatePrompt(text, sourceLang, targetLang);
   const ctx = globalThis.SillyTavern?.getContext?.();
-  if (!ctx?.generateQuietPrompt) {
-    throw new Error('Backend de SillyTavern no disponible. Usa otro proveedor o recarga ST completamente.');
+
+  // Vía principal: proxy directo al backend ST (sin contexto de chat)
+  const chatSource = ctx?.chatCompletionSettings?.chat_completion_source;
+  const model = ctx?.getChatCompletionModel?.();
+  if (ctx?.getRequestHeaders && chatSource && model) {
+    try {
+      return await translateViaSTChatProxy(text, sourceLang, targetLang, chatSource, model);
+    } catch (err) {
+      console.warn('ST Translator: proxy chat-completions falló, intentando quiet prompt', err);
+    }
   }
 
-  // Vía principal: generateQuietPrompt usa la conexión activa (textgen o chat)
-  try {
-    const result = await ctx.generateQuietPrompt({ quietPrompt: prompt });
+  // Fallback: generateQuietPrompt (usa pipeline completo de ST; puede incluir
+  // contexto del chat activo — solo usar si no hay fuente de chat disponible,
+  // p.ej. conexión textgen pura como KoboldCPP sin chat completion).
+  if (ctx?.generateQuietPrompt) {
+    const prompt = buildTranslatePrompt(text, sourceLang, targetLang);
+    const result = await ctx.generateQuietPrompt({ quietPrompt: prompt, skipWIAN: true });
     if (typeof result === 'string' && result.trim()) {
       return result.trim();
     }
-    console.warn('ST Translator: generateQuietPrompt devolvió vacío, probando proxy directo');
-  } catch (err) {
-    console.warn('ST Translator: generateQuietPrompt falló, probando proxy directo', err);
   }
 
-  // Fallback: llamar al endpoint de chat-completions del backend ST con el
-  // chat_completion_source configurado actualmente (el servidor resuelve la key).
-  const chatSource = ctx.chatCompletionSettings?.chat_completion_source;
-  const model = ctx.getChatCompletionModel?.();
-  if (!chatSource || !model) {
-    throw new Error('No hay conexión de chat configurada en SillyTavern.');
-  }
-
-  return translateViaSTChatProxy(text, sourceLang, targetLang, chatSource, model);
+  throw new Error('Sin conexión activa en SillyTavern para traducir.');
 }
 
 /**

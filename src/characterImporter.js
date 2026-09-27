@@ -240,6 +240,29 @@ export class JuicyChatProvider extends CharacterProvider {
       console.warn('JuicyChat: no se pudo cargar la galería (opcional)', err);
     }
 
+    // Para cada galería temática (galleryList) intentar traer sus fotos individuales.
+    // Si el endpoint acepta la petición pública, recuperamos las URL claras; si está
+    // tras paywall (unlockPrice > 0) devuelve sólo los blurred, lo cual se detecta.
+    if (gallery?.galleryList?.length) {
+      const galleries = await Promise.allSettled(
+        gallery.galleryList.map(async (g) => {
+          if (!g?.galleryId) return null;
+          try {
+            const pics = await postEncrypted(
+              '/yume/api/user/v1/gallery/galleryPicturePage',
+              { galleryId: String(g.galleryId), pageNo: 1, pageSize: 100, needLoginUserData: false }
+            );
+            return { gallery: g, pics: pics?.list ?? pics ?? [] };
+          } catch {
+            return { gallery: g, pics: [] };
+          }
+        })
+      );
+      gallery.expandedGalleries = galleries
+        .filter((r) => r.status === 'fulfilled' && r.value)
+        .map((r) => r.value);
+    }
+
     return { ...detail, _gallery: gallery };
   }
 
@@ -254,13 +277,74 @@ export class JuicyChatProvider extends CharacterProvider {
 
     const desc = stripInlineImages(raw.introduction || raw.description || '');
 
-    // Galería: solo incluir las desbloqueadas (clearPictureUrl); blur queda fuera
-    const albumUnlocked = (raw._gallery?.albumList ?? []).filter((i) => i?.clearPictureUrl);
-    const albumUrls = albumUnlocked.map((i) => i.clearPictureUrl);
+    // Galería: cada imagen lleva su propio switch de paywall — clearPictureUrl SOLO
+    // viene en el payload si el usuario actual la desbloqueó o es gratis (unlockCoin 0).
+    // imagePrompt es JSON string doble-escapado con los tags SDXL completos.
+    const parsePrompt = (raw) => {
+      if (!raw) return null;
+      try {
+        const j = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        // Recoger los campos no vacíos en una línea legible para editor
+        const order = ['illustration_description', 'action', 'background', 'dressing_situation', 'interaction_with_the_viewer', 'viewer_exposed_limbs'];
+        const parts = order
+          .map((k) => (j[k] ? String(j[k]).trim() : null))
+          .filter(Boolean);
+        if (!parts.length) return null;
+        return parts.join('\n');
+      } catch {
+        return typeof raw === 'string' ? raw : null;
+      }
+    };
+
+    // Solo las desbloqueadas traen clearPictureUrl
+    const unlockedPics = [];
+    const lockedPics = [];
+
+    const pushPic = (item) => {
+      if (!item) return;
+      const info = {
+        pictureId: item.pictureId,
+        clearUrl: item.clearPictureUrl ?? null,
+        blurUrl: item.blurPictureUrl ?? null,
+        prompt: parsePrompt(item.imagePrompt),
+        inputContent: item.inputContent || null, // senario que originó la imagen (con {{user}})
+        unlockCoin: typeof item.unlockCoin === 'number' ? item.unlockCoin : null,
+        proportion: item.imageProportion ?? null,
+        createType: item.createType ?? null,
+      };
+      if (info.clearUrl) {
+        unlockedPics.push(info);
+      } else if (info.blurUrl) {
+        lockedPics.push(info);
+      }
+    };
+
+    for (const albumItem of raw._gallery?.albumList ?? []) {
+      pushPic(albumItem);
+    }
+    for (const gal of raw._gallery?.expandedGalleries ?? []) {
+      for (const pic of gal.pics ?? []) {
+        pushPic({ ...pic, clearPictureUrl: pic.pictureUrl, blurPictureUrl: pic.maskPictureUrl });
+      }
+    }
+    // Cubiertas de galería (portada siempre libre)
     const galleryCovers = (raw._gallery?.galleryList ?? [])
       .map((g) => g?.coverUrl ?? null)
       .filter(Boolean);
-    const lockedCount = (raw._gallery?.albumList ?? []).length - albumUnlocked.length;
+
+    const lockedCount = lockedPics.length;
+
+    // Prompts de las desbloqueadas, resumidos como texto (uno por línea, con índice
+    // para que el usuario vea qué imágenes pueden regenerarse).
+    // Las bloqueadas solo tienen blur: su prompt también se guarda como nota inutilizable.
+    const promptsFromUnlocked = unlockedPics
+      .map((p, i) => (p.prompt ? `#${i + 1} [${p.proportion === 0 ? 'H' : 'V'}]: ${p.prompt}` : null))
+      .filter(Boolean);
+    const promptsDebug = lockedPics.length
+      ? `\n\n† ${lockedPics.length} imágenes están tras paywall (solo blurred).`
+      : '';
+
+    const unlockedUrls = unlockedPics.map((p) => p.clearUrl);
 
     return {
       name: raw.characterName || raw.nickname || 'JuicyChat character',
@@ -273,13 +357,14 @@ export class JuicyChatProvider extends CharacterProvider {
       creator: raw.characterUserInfo?.userName || raw.userName || '',
       // preferir thumb: siempre JPEG estático (characterPhoto a veces es GIF)
       avatarUrl: raw.characterThumb || raw.characterPhoto || null,
-      backgroundUrls: [raw.characterPhoto, raw.characterThumb, ...albumUrls, ...galleryCovers]
+      backgroundUrls: [raw.characterPhoto, raw.characterThumb, ...unlockedUrls, ...galleryCovers]
         .filter((u, i, a) => u && a.indexOf(u) === i),
       galleryInfo: {
         albumCount: (raw._gallery?.albumList ?? []).length,
         galleryCount: (raw._gallery?.galleryList ?? []).length,
-        unlockedCount: albumUrls.length,
+        unlockedCount: unlockedUrls.length,
         lockedCount,
+        prompts: promptsFromUnlocked.length ? promptsFromUnlocked.join('\n') + promptsDebug : null,
       },
     };
   }

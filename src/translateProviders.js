@@ -119,7 +119,29 @@ export async function translateViaSTChatProxy(text, sourceLang, targetLang, chat
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Error del backend de SillyTavern (${response.status}): ${errText.slice(0, 200)}`);
+    // Si el backend devolvió una página HTML (p.ej. Cloudflare 5xx del upstream),
+    // dar un mensaje accionable en vez de volcar el HTML crudo.
+    if (/^\s*<!doctype html/i.test(errText) || /^\s*<html/i.test(errText)) {
+      const titleMatch = errText.match(/<title>([^<]+)<\/title>/i);
+      const codeMatch = errText.match(/(\d{3})\b/);
+      const upstreamName = ['openrouter'].includes(chatCompletionSource) ? 'OpenRouter'
+        : ['electronhub'].includes(chatCompletionSource) ? 'Electron Hub'
+        : chatCompletionSource;
+      const detail = titleMatch?.[1]?.trim() || codeMatch?.[1] || 'error del servidor';
+      throw new Error(
+        `${upstreamName}: el servidor upstream está caído o saturado (${detail}). ` +
+        `Es un problema del servicio, no de tus credenciales. Reintenta en unos minutos o selecciona otro proveedor.`
+      );
+    }
+
+    let detail = errText.slice(0, 300);
+    try {
+      const parsed = JSON.parse(errText);
+      detail = parsed.error?.message || parsed.error || JSON.stringify(parsed).slice(0, 300);
+    } catch {
+      /* no era JSON */
+    }
+    throw new Error(`Error del backend de SillyTavern (${response.status}): ${detail}`);
   }
 
   const data = await response.json();
@@ -402,6 +424,12 @@ async function translateWithElectronHub(text, sourceLang, targetLang, providerCo
     }
     if (error.message.includes('429')) {
       throw new Error(`Electron Hub: Límite de uso excedido.`);
+    }
+    if (error.message.includes('504') || error.message.includes('Gateway')) {
+      throw new Error(`Electron Hub: el servidor está temporalmente caído (504 gateway timeout). Intenta de nuevo en unos minutos o cambia de proveedor.`);
+    }
+    if (error.message.includes('502') || error.message.includes('503')) {
+      throw new Error(`Electron Hub: servidor saturado (${error.message.match(/50[23]/)?.[0]}). Intenta de nuevo más tarde.`);
     }
     throw new Error(`Error con Electron Hub: ${error.message}`);
   }

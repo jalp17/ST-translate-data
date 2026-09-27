@@ -79,19 +79,28 @@ export async function fetchJson(url, init = {}, timeoutMs = 30000) {
     } catch {
       // Use plain text message.
     }
+
+    // Detectar páginas HTML de error (Cloudflare 5xx, proxies, etc.) y dar
+    // un mensaje claro en lugar de volcar el HTML como error.
+    if (/^\s*<!doctype html/i.test(message) || /^\s*<html/i.test(message)) {
+      const codeMatch = message.match(/(\d{3})\b/);
+      const code = codeMatch?.[1] ?? String(response.status);
+      message = `El servidor remoto devolvió una página de error HTML (${code}). El servicio está caído o saturado, inténtalo más tarde o cambia de proveedor.`;
+    }
+
     console.error(`fetchJson HTTP error calling ${url}: ${response.status} ${response.statusText}`, message);
 
     if (response.status === 401) {
-      throw new Error(`Error de autenticación (401) al llamar a ${url}: Verifica la API key. ${message}`);
+      throw new Error(`Error de autenticación (401): ${message}`);
     }
     if (response.status === 429) {
-      throw new Error(`Límite de tasa excedido (429) al llamar a ${url}: Espera un momento antes de reintentar. ${message}`);
+      throw new Error(`Límite de tasa excedido (429): ${message}`);
     }
     if (response.status >= 500) {
-      throw new Error(`Error del servidor (500+) al llamar a ${url}: El servicio puede estar caído. ${message}`);
+      throw new Error(`Error del servidor (${response.status}): ${message}`);
     }
 
-    throw new Error(`Error en la llamada a ${url}: ${response.status} ${response.statusText} - ${message}`);
+    throw new Error(`Error en la llamada (${response.status}): ${message}`);
   }
 
   if (contentType.includes('application/json')) {

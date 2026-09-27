@@ -1,5 +1,6 @@
 import { DEFAULT_ENDPOINTS, getModelsForProvider } from './translateProviders.js';
 import { importCharacterFromUrl, buildCharacterCardPng } from './characterImporter.js';
+import { CHAT_EXPORT_SCRIPTS } from './chatExportScripts.js';
 import { populateForm, bindAutoSave } from './ui/settings.js';
 
 export { populateForm, bindAutoSave } from './ui/settings.js';
@@ -138,6 +139,12 @@ export function attachTranslatorSettingsEvents() {
   const characterUrlInput = document.getElementById('characterUrlInput');
   const characterJsonInput = document.getElementById('characterJsonInput');
   const importUrlButton = document.getElementById('importUrlButton');
+  const chatExportSiteSelect = document.getElementById('chatExportSiteSelect');
+  const chatExportSiteNote = document.getElementById('chatExportSiteNote');
+  const copyChatScriptButton = document.getElementById('copyChatScriptButton');
+  const previewChatScriptButton = document.getElementById('previewChatScriptButton');
+  const chatScriptPreview = document.getElementById('chatScriptPreview');
+  const chatExportStatusText = document.getElementById('chatExportStatusText');
 
   if (!pngBatchInput || !pngBatchDropZone || !translatePngButton || !translateLorebookButton || !translateSelectedCharactersButton || !refreshCharacterListButton || !characterBatchSelect || !sourceLangSelect || !targetLangSelect || !providerSelect || !modelInput || !apiUrlInput || !apiKeyInput || !apiKeyLoadButton || !refreshProfilesButton || !connectionModeSelect || !useProfileProviderCheckbox || !apiKeyProfileSelect || !statusDetailsText || !progressBar || !statusText || !batchDelayInput || !lorebookSelect || !refreshLorebookListButton) {
     return;
@@ -1290,6 +1297,79 @@ export function attachTranslatorSettingsEvents() {
         handleTranslationError(error, 'Error al importar el personaje desde URL.');
       }
     }));
+  }
+
+  // ---------------------------------------------------------------------
+  // Exportador de chats: sólo copia el script al portapapeles. El script
+  // se ejecuta en la consola del sitio de origen (hereda la sesión del
+  // usuario) y descarga los chats como .jsonl. La extensión no almacena
+  // ninguna credencial ni hace peticiones autenticadas.
+  // ---------------------------------------------------------------------
+  if (chatExportSiteSelect && copyChatScriptButton) {
+    const STATUS_LABEL = { ok: 'Verificado', partial: 'Parcial', no: 'No verificado' };
+
+    const renderChatSiteNote = () => {
+      const entry = CHAT_EXPORT_SCRIPTS[chatExportSiteSelect.value];
+      if (!entry || !chatExportSiteNote) return;
+      chatExportSiteNote.textContent = `${STATUS_LABEL[entry.status] ?? entry.status} — ${entry.note}`;
+    };
+
+    // Llenar el desplegable una sola vez
+    if (!chatExportSiteSelect.options.length) {
+      for (const [key, entry] of Object.entries(CHAT_EXPORT_SCRIPTS)) {
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = entry.label;
+        chatExportSiteSelect.appendChild(opt);
+      }
+    }
+    renderChatSiteNote();
+    chatExportSiteSelect.addEventListener('change', renderChatSiteNote);
+
+    previewChatScriptButton?.addEventListener('click', () => {
+      const entry = CHAT_EXPORT_SCRIPTS[chatExportSiteSelect.value];
+      if (!entry || !chatScriptPreview) return;
+      const isHidden = chatScriptPreview.style.display === 'none';
+      chatScriptPreview.textContent = entry.script;
+      chatScriptPreview.style.display = isHidden ? 'block' : 'none';
+      previewChatScriptButton.innerHTML = isHidden
+        ? '<i class="fa-solid fa-eye-slash"></i> Ocultar código'
+        : '<i class="fa-solid fa-eye"></i> Ver código';
+    });
+
+    copyChatScriptButton.addEventListener('click', async () => {
+      const entry = CHAT_EXPORT_SCRIPTS[chatExportSiteSelect.value];
+      if (!entry) return;
+
+      try {
+        await navigator.clipboard.writeText(entry.script);
+        if (chatExportStatusText) {
+          chatExportStatusText.textContent =
+            `✓ Script de ${entry.label} copiado. Pégalo en la consola del sitio con tu sesión iniciada (F12 → Console).`;
+        }
+      } catch {
+        // Contexto no seguro (http:// en IP de red local) bloquea la API de
+        // portapapeles: usamos el textarea + execCommand como plan B.
+        if (chatScriptPreview) {
+          chatScriptPreview.textContent = entry.script;
+          chatScriptPreview.style.display = 'block';
+          chatScriptPreview.focus();
+          chatScriptPreview.select();
+        }
+        try {
+          document.execCommand('copy');
+          if (chatExportStatusText) {
+            chatExportStatusText.textContent =
+              `✓ Script copiado (método alternativo). También puedes seleccionarlo y copiar a mano desde el código mostrado.`;
+          }
+        } catch {
+          if (chatExportStatusText) {
+            chatExportStatusText.textContent =
+              'No se pudo copiar automáticamente. Pulsa "Ver código", selecciona todo y copia con Ctrl+C.';
+          }
+        }
+      }
+    });
   }
 
   setupDragAndDrop(pngBatchDropZone, pngBatchInput, (files) => {

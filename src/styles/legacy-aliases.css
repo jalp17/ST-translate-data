@@ -281,3 +281,23 @@
   flex: 1 1 180px;
   width: auto;
 }
+
+/* Preview del script de exportación de chats */
+.sttd-translator-panel .sttd-code-preview {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  white-space: pre;
+  color: var(--text-color, #e6e6e6);
+  user-select: text;
+}
+
+.sttd-translator-panel .sttd-code-preview:focus {
+  outline: 1px solid rgba(255, 255, 255, 0.25);
+}

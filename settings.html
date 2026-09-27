@@ -156,7 +156,7 @@
           <div class="sttd-full-width">
             <label for="characterUrlInput">URL del personaje</label>
             <input id="characterUrlInput" class="sttd-input" type="text" placeholder="https://moescape.ai/tavern/characters/… o https://tipsy.chat/character/…" />
-            <div class="sttd-hint">Sitios soportados: moescape.ai, tipsy.chat.</div>
+            <div class="sttd-hint">Sitios soportados: moescape.ai, tipsy.chat, juicychat.ai, emochi.com.</div>
           </div>
 
           <div class="sttd-full-width">
@@ -173,23 +173,29 @@
       </div>
 
       <div class="sttd-section-card">
-        <div class="sttd-section-title"><i class="fa-solid fa-link"></i> Importar desde URL</div>
+        <div class="sttd-section-title"><i class="fa-solid fa-comments"></i> Exportar chats existentes</div>
         <div class="sttd-form-grid">
           <div class="sttd-full-width">
-            <label for="characterUrlInput">URL del personaje</label>
-            <input id="characterUrlInput" class="sttd-input" type="text" placeholder="https://moescape.ai/tavern/characters/... o https://tipsy.chat/character/..." />
-            <div class="sttd-hint">Sitios soportados: moescape.ai, tipsy.chat</div>
-          </div>
-          <div class="sttd-full-width">
-            <label for="characterJsonInput">JSON alternativo (si el sitio bloquea CORS)</label>
-            <textarea id="characterJsonInput" class="sttd-input" rows="4" placeholder="Pega aquí el JSON del endpoint de la API del sitio (DevTools → Network) para saltarte el bloqueo CORS"></textarea>
+            <label for="chatExportSiteSelect">Sitio de origen</label>
+            <select id="chatExportSiteSelect" class="sttd-input"></select>
+            <div id="chatExportSiteNote" class="sttd-hint"></div>
           </div>
         </div>
         <div class="button-row">
-          <button id="importUrlButton" type="button" class="sttd-button primary">
-            <i class="fa-solid fa-cloud-arrow-down"></i> Importar desde URL
+          <button id="copyChatScriptButton" type="button" class="sttd-button primary">
+            <i class="fa-solid fa-copy"></i> Copiar script de exportación
+          </button>
+          <button id="previewChatScriptButton" type="button" class="sttd-button">
+            <i class="fa-solid fa-eye"></i> Ver código
           </button>
         </div>
+        <div class="sttd-hint" style="margin-top: 0.75rem;">
+          Copia el script, abre el sitio con tu sesión iniciada, pulsa <code>F12</code> → <b>Console</b>,
+          pégalo y dale a Enter. Los chats se descargan como <code>.jsonl</code> (formato nativo de
+          SillyTavern) en tu carpeta de Descargas. La extensión no almacena ninguna credencial.
+        </div>
+        <pre id="chatScriptPreview" class="sttd-code-preview" style="display:none; max-height: 280px; overflow:auto; margin-top:0.75rem;"></pre>
+        <div id="chatExportStatusText" class="sttd-hint"></div>
       </div>
 
       <div class="sttd-section-card">

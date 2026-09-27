@@ -370,7 +370,222 @@ export class JuicyChatProvider extends CharacterProvider {
   }
 }
 
-export const PROVIDERS = [new MoescapeProvider(), new TipsyProvider(), new JuicyChatProvider()];
+/**
+ * Emochi (flowgpt infra): los endpoints /api/prompt/{id} del backend K8s
+ * (emochi-backend-k8s.flowgpt.com) devuelven 403 sin sesión válida y el
+ * site se basa en Next.js SSR: toda la info de la página de personaje ya
+ * viene server-side en el HTML. En lugar de probar endpoints posteópad
+ * con CORS, leemos el HTML y parseamos los datos visibles:
+ *
+ *   - JSON-LD (script type="application/ld+json") con Person
+ *   - og-title / og-description / og-image meta tags
+ *   - link/body markdown-trimmed intro text
+ *   - creator link: /prompt/bot-creator-profile?creatorId=XXX&promptId=YYY
+ *
+ * El HTML incluye siempre: título, intro/descripción, tags (visibles como
+ * lastwords after dots / keywords SEO), avatar (trans-images/prompt/{id}/{ts}.webp),
+ * creatorId y prompt_id. No incluye first_mes (ese es un campo de sesión).
+ */
+export class EmochiProvider extends CharacterProvider {
+  constructor() {
+    super('emochi');
+  }
+
+  canHandle(url) {
+    return /(^|\.)emochi\.com$/i.test(new URL(url).hostname) && this.extractId(url) !== null;
+  }
+
+  extractId(url) {
+    // URLs tipo /character/chomiks-text-adventure o /character/{name}-{id}/chat
+    const m = String(url).match(/\/character\/([a-z0-9][\w-]*?)(?:\/chat)?(?:[?#]|$)/i);
+    return m ? m[1] : null;
+  }
+
+  async fetchRaw(slug) {
+    const response = await fetch(`https://emochi.com/character/${encodeURIComponent(slug)}`, {
+      headers: { 'Accept': 'text/html' },
+      redirect: 'follow',
+    });
+    if (!response.ok) {
+      throw new Error(`Emochi respondió ${response.status} al cargar la página del personaje.`);
+    }
+    const html = await response.text();
+    return this.parseHtml(html, slug);
+  }
+
+  /**
+   * Parsea el HTML SSR de Emochi. Cada dato viene de:
+   * - <title>Nombre Profile on Emochi...</title>
+   * - meta og:title / og:description / og:image
+   * - JSON-LD ProfilePage + Person (name, description en algunos jsonld)
+   * - link "Created by @XXX" -> roto: aparece en el texto
+   * - Intro text: viene tras el heading "Intro" marcado como <div>Intro</div>
+   * - tags: vienen tras "Created by" line como palabras separadas por comas
+   *
+   * Es un scrape tolerante a cambios menores del HTML.
+   */
+  parseHtml(html, slug) {
+    // --- JSON-LD (datos principales) ---
+    let jsonld = {};
+    const ldBlocks = html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+    for (const match of ldBlocks) {
+      try {
+        const parsed = JSON.parse(match[1]);
+        if (parsed['@type'] === 'ProfilePage') {
+          jsonld = parsed;
+          break;
+        }
+      } catch {
+        /* ignorar bloques malformed */
+      }
+    }
+
+    const person = jsonld.mainEntity || {};
+    const profile = jsonld;
+
+    // --- Meta tags fallback ---
+    const meta = (name) => {
+      const re = new RegExp(`<meta[^>]+(?:property|name)=["']${name}["'][^>]+content=["']([^"']*)["']`, 'i');
+      const m = html.match(re);
+      return m ? m[1] : null;
+    };
+
+    // --- Nombre (og:title o title fallback) ---
+    const ogTitle = meta('og:title') || '';
+    const name = person.name
+      || ogTitle.replace(/ Profile on Emochi.*/i, '').replace(/ Profile \|.*/i, '').trim()
+      || slug;
+
+    // --- Descripción larga (intro) ---
+    // El texto plano tras <div>Intro</div> / debajo de la imagen. A veces es el toc que sigue a "Creator".
+    let introBody = '';
+
+    // Buscar la zona entre "Creator" section y el siguiente heading (AdventureComedy...)
+    // Patrón observado: ...Created by @X<br>... more text ... Intro ...  * tags ... description
+    // Mejor: buscar en orden los dos últimos bloques de texto plano que contienen las "more" sentences
+    const plain = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, '\n')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#x27;/g, "'");
+
+    const lines = plain.split('\n').map((l) => l.trim()).filter((l) => l.length > 40);
+    // La intro suele ser el bloque con más texto natural (no badge, no slogans)
+    for (const line of lines) {
+      if (/is (le|a|an|the|your|your's|my|(.+)).*funny|adventure|story|roleplay|fantasy|scenari/i.test(line)
+          && line.length > introBody.length) {
+        introBody = line;
+      }
+    }
+    // Si no encontramos intro por patrón, tomamos el bloque con más contenido tras 'Created by'
+    if (!introBody) {
+      const createdIdx = plain.indexOf('Created by');
+      if (createdIdx > 0) {
+        introBody = plain.slice(createdIdx, createdIdx + 4000).split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l.length > 40 && !l.startsWith('http'))
+          .join('\n\n');
+      }
+    }
+
+    // --- Tags: vienen tras "Intro" como líneas separadas "Adventure\n\nComedy\n\nGuide..."
+    let tags = [];
+    const introIdx = plain.indexOf('\nIntro\n');
+    if (introIdx > 0) {
+      const afterIntro = plain.slice(introIdx, introIdx + 400).split('\n');
+      const stopAt = afterIntro.findIndex((l, i) => i > 0 && l.trim() === '...');
+      const slice = (stopAt > 0 ? afterIntro.slice(1, stopAt) : afterIntro.slice(1, 15));
+      // Convertir "\n\n" de formato de bloques a items únicos, y aplanar camelCase
+      const lines = slice.map((l) => l.trim()).filter((l) => l && l !== 'Intro');
+      const flatTags = new Set();
+      for (const line of lines) {
+        // cada línea puede ser "Adventure" O "AdventureComedyGuide" (si el HTML puso un solo bloque con join)
+        const parts = line.split(/(?=[A-Z])/).filter(Boolean);
+        for (const p of parts) {
+          if (/^[A-Z][A-Za-z]+$/.test(p) && !/^[A-Z]{2}/.test(p)) flatTags.add(p);
+        }
+      }
+      tags = Array.from(flatTags).filter(Boolean);
+    }
+    // Si no encontramos tags por el patrón, extralos del title/keywords SEO
+    if (!tags.length) {
+      const mKeywords = html.match(/<meta[^>]+name=["']keywords["'][^>]+content=["']([^"']+)["']/i);
+      if (mKeywords) {
+        tags = mKeywords[1].split(',').map((t) => t.trim()).filter((t) => t && t.length < 25 && !/^(character|ai|roleplay|Anime)$/i.test(t)).slice(0, 8);
+      }
+    }
+
+    // --- Creator ---
+    let creator = person.author?.name || person['@creator']?.name || '';
+    if (!creator) {
+      const match = html.match(/type\s*=\s*literal[^>]*>@([\w\.~\- ]+)/)
+        || html.match(/Created by\s*@?([A-Za-z0-9_\.\- ]+)/)
+        || html.match(/by\s*@([\w\.\- ]+)/i);
+      if (match) creator = match[1].trim();
+    }
+
+    // --- Avatar ---
+    // og:image siempre trae trans-images/prompt/... preferir la no-trans-image (sin CDN transform)
+    const ogImg = meta('og:image') || '';
+    let avatarUrl = ogImg || null;
+    // Buscar la versión no-trans-image (raw) en el HTML
+    const rawImgMatch = html.match(/(https:\/\/image-cdn\.flowgpt\.com\/(?:prompt|avatars)\/[^\s"'\)\]<>,\\]+)/i);
+    if (rawImgMatch) avatarUrl = rawImgMatch[1];
+    // Limpiar \\ al final si existe
+    if (avatarUrl) avatarUrl = avatarUrl.replace(/\\+$/, '');
+
+    // --- El greeting no viene en el HTML público (es campo de sesión). Se usa la intro. ---
+    const greeting = introBody;
+
+    // --- PromptId (para extensiones) ---
+    let promptId = person.identifier
+      || html.match(/promptId=([A-Za-z0-9_\-]+)/)?.[1]
+      || null;
+    // Rescatar del og:image si viene ahí
+    if (!promptId && avatarUrl) {
+      const m = avatarUrl.match(/\/prompt\/([A-Za-z0-9_\-]+)\//);
+      if (m) promptId = m[1];
+    }
+
+    return {
+      name,
+      description: introBody,
+      personality: '',
+      scenario: '',
+      first_mes: greeting,
+      mes_example: '',
+      promptId,
+      tags,
+      creator,
+      avatarUrl,
+      backgroundUrls: [],
+      _emochi: { ogDesc: person.description || '' },
+    };
+  }
+
+  toCardFields(raw) {
+    return {
+      name: raw.name,
+      description: raw.description,
+      personality: raw.personality,
+      scenario: raw.scenario,
+      first_mes: raw.first_mes,
+      mes_example: raw.mes_example,
+      tags: raw.tags,
+      creator: raw.creator,
+      avatarUrl: raw.avatarUrl,
+      backgroundUrls: raw.backgroundUrls ?? [],
+      emochiNotes: `PromptId: ${raw.promptId || 'desconocido'} | Extracto de página pública — el greeting original solo aparece al estar logueado.`,
+    };
+  }
+}
+
+export const PROVIDERS = [new MoescapeProvider(), new TipsyProvider(), new JuicyChatProvider(), new EmochiProvider()];
 
 /**
  * Devuelve el primer proveedor que reconoce la URL.

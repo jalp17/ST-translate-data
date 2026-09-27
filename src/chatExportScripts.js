@@ -23,6 +23,75 @@ function readCookie(name) {
     ?.split('=').slice(1).join('=');
 }
 
+// El JWT puede no estar en una cookie: el flujo /api/v1/login/firebase lo
+// devuelve en el CUERPO de la respuesta, y la SPA lo guarda en
+// localStorage / sessionStorage. Buscamos en todos los almacenes posibles.
+function findToken(names) {
+  const stores = [localStorage, sessionStorage];
+  const patterns = [];
+
+  for (const name of names) {
+    // 1) cookie (visible solo si no es HttpOnly)
+    const fromCookie = readCookie(name);
+    if (fromCookie) return fromCookie;
+
+    for (const store of stores) {
+      // 2) clave exacta
+      try {
+        const exact = store.getItem(name);
+        if (exact) return exact.replace(/^"|"$/g, '');
+      } catch {}
+
+      // 3) clave que contiene el nombre (p.ej. "tipsy_token", "user.token")
+      try {
+        for (let i = 0; i < store.length; i++) {
+          const key = store.key(i);
+          if (!key || !key.toLowerCase().includes(name.toLowerCase())) continue;
+          const value = store.getItem(key);
+          if (!value) continue;
+          // Si parece un JSON anidado, extraer el campo del token
+          if (/^\\s*[{[]/.test(value)) {
+            const found = JSON.stringify(JSON.parse(value)).match(/eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+/);
+            if (found) return found[0];
+          }
+          // Si es un JWT directo
+          const jwt = value.match(/eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+/);
+          if (jwt) return jwt[0];
+        }
+      } catch {}
+    }
+
+    // 4) cualquier JWT suelto en los almacenes
+    for (const store of stores) {
+      try {
+        for (let i = 0; i < store.length; i++) {
+          const value = store.getItem(store.key(i));
+          if (!value) continue;
+          const jwt = String(value).match(/eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}/);
+          if (jwt) return jwt[0];
+        }
+      } catch {}
+    }
+  }
+
+  return null;
+}
+
+// Volca lo que hay almacenado para poder diagnosticar cuando no aparece.
+function dumpStorageHint() {
+  const keys = [];
+  for (const [label, store] of [['localStorage', localStorage], ['sessionStorage', sessionStorage]]) {
+    try {
+      for (let i = 0; i < store.length; i++) {
+        const k = store.key(i);
+        keys.push(label + '.' + k);
+      }
+    } catch {}
+  }
+  console.log('[export] Claves en los almacenes:', keys.length ? keys : '(ninguna)');
+  console.log('[export] Cookies:', document.cookie);
+}
+
 function download(filename, text) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([text], { type: 'application/jsonl' }));
@@ -63,20 +132,26 @@ function toSillyTavernJsonl(messages, charName) {
 const TIPSY = `(async () => {
 ${COMMON}
   const HOST = 'https://api.tipsy.chat';
-  const token = readCookie('token');
+  const token = findToken(['token', 'access_token', 'accessToken', 'jwt', 'user_token']);
   if (!token) {
-    _err('No se encontro la cookie "token".');
-    _err('Asegurate de estar en tipsy.chat (sin www) y con la sesion iniciada.');
-    console.log('Cookies visibles:', document.cookie);
+    _err('No se encontro el token de sesion.');
+    _err('Se busca en cookies y en localStorage/sessionStorage.');
+    _err('Causas probables: sesion no iniciada, o el token es HttpOnly (pégalo a mano).');
+    dumpStorageHint();
     return;
   }
   _log('Token encontrado (' + token.length + ' chars)');
 
   const api = (path, body) => fetch(HOST + path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + token,
+      'token': token,
+    },
     body: JSON.stringify(body),
   }).then(async (r) => {
+    if (r.status === 401) throw new Error(path + ' -> 401: token rechazado o caducado');
     const j = await r.json();
     if (j.code && j.code !== 0) throw new Error(path + ' -> ' + (j.msg || j.code));
     return j.data;
@@ -93,7 +168,11 @@ ${COMMON}
   const charsData = await api('/api/v1/character/list/self', {});
   const chars = charsData?.list || charsData?.characterList || (Array.isArray(charsData) ? charsData : []);
   _log('Personajes encontrados: ' + chars.length);
-  if (!chars.length) { _err('La API no devolvio personajes. Puede que la sesion no sea valida.'); return; }
+  if (!chars.length) {
+    _err('La API no devolvio personajes. Puede que el token no corresponda a esta cuenta.');
+    console.log('Respuesta cruda:', JSON.stringify(charsData).slice(0, 400));
+    return;
+  }
 
   const urlId = location.pathname.match(/\\/chat\\/(\\d+)/)?.[1];
   const char = (urlId && chars.find(c => String(c.character_id) === urlId)) || await pick(chars);
@@ -156,10 +235,11 @@ ${COMMON}
     return JSON.parse(decodeURIComponent(escape(atob(dec.decode(inner)))));
   }
 
-  const token = readCookie('token') || readCookie('access_token') || readCookie('jwt');
+  const token = findToken(['token', 'access_token', 'accessToken', 'jwt']);
   if (!token) {
-    _err('No se encontro la cookie de sesion (token / access_token / jwt).');
-    _err('Revisa DevTools > Application > Cookies y ajusta los nombres en el script.');
+    _err('No se encontro el token de sesion.');
+    _err('Se busca en cookies y en localStorage/sessionStorage.');
+    dumpStorageHint();
     return;
   }
   _log('Token encontrado (' + token.length + ' chars)');

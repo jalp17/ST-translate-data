@@ -80,6 +80,10 @@ export class CharacterProvider {
       avatarUrl: f.avatarUrl || null,
       backgroundUrls: f.backgroundUrls || [],
       galleryInfo: f.galleryInfo ?? null,
+      // Imágenes que el sitio embebe como markdown en el texto (greeting de
+      // Tipsy). Se pueden embeber en un .charx para que la tarjeta no
+      // dependa de un hosting externo.
+      embeddedImages: f.embeddedImages || [],
     };
   }
 }
@@ -194,9 +198,11 @@ export class TipsyProvider extends CharacterProvider {
       // SillyTavern, que renderiza markdown igual que Tipsy.
       first_mes: raw.greeting || raw.first_message || '',
       mes_example: stripInlineImagesInTipsy(raw.example_dialogue || raw.dialog_example || ''),
+      // Imágenes del greeting, para poder embeberlas en un .charx y que la
+      // tarjeta no dependa de que i.postimg.cn siga sirviéndolas.
+      embeddedImages: extractMarkdownImageUrls(raw.greeting || ''),
       // content_type 1 = formato antiguo con imágenes markdown en el greeting;
       // 3 = formato nuevo estructurado, sin imágenes embebidas.
-      greetingImages: (raw.greeting || '').match(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g) || [],
       contentType: raw.content_type ?? null,
       // Tipsy no expone system_prompt ni post_history en el endpoint público
       systemPrompt: '',
@@ -221,7 +227,19 @@ export class TipsyProvider extends CharacterProvider {
 }
 
 function stripInlineImagesInTipsy(s) {
-  return (s || '').replace(/!\[[^\]]*\]\(https?:[^)]+\)/g, '').trim();
+  return (s || '').replace(/!\[[^\]]*\]\(https?:\/\/[^)]+\)/g, '').trim();
+}
+
+/** Extrae las URLs de imágenes markdown de un texto, sin repetir y en orden. */
+export function extractMarkdownImageUrls(text) {
+  const matches = String(text || '').matchAll(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g);
+  const urls = [];
+  for (const m of matches) {
+    if (!urls.includes(m[1])) {
+      urls.push(m[1]);
+    }
+  }
+  return urls;
 }
 
 /**

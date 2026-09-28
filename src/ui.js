@@ -139,6 +139,8 @@ export function attachTranslatorSettingsEvents() {
   const characterUrlInput = document.getElementById('characterUrlInput');
   const characterJsonInput = document.getElementById('characterJsonInput');
   const importUrlButton = document.getElementById('importUrlButton');
+  const importFormatSelect = document.getElementById('importFormatSelect');
+  const importFormatHint = document.getElementById('importFormatHint');
   const chatExportSiteSelect = document.getElementById('chatExportSiteSelect');
   const chatExportSiteNote = document.getElementById('chatExportSiteNote');
   const copyChatScriptButton = document.getElementById('copyChatScriptButton');
@@ -1197,6 +1199,21 @@ export function attachTranslatorSettingsEvents() {
   }));
 
   if (importUrlButton && characterUrlInput) {
+    if (importFormatSelect && importFormatHint) {
+      const updateFormatHint = () => {
+        if (importFormatSelect.value === 'charx') {
+          importFormatHint.textContent =
+            'CharX: un único archivo .charx con el avatar y las imágenes del mensaje inicial embebidos. ' +
+            'Las imágenes no se rompen si el hosting externo desaparece y no dependen de la opción de bloquear media externa.';
+        } else {
+          importFormatHint.textContent =
+            'PNG: compatible con todas las apps. Las imágenes del mensaje inicial se referencian por URL.';
+        }
+      };
+      importFormatSelect.addEventListener('change', updateFormatHint);
+      updateFormatHint();
+    }
+
     importUrlButton.addEventListener('click', withBusyState(importUrlButton, 'Importando desde URL...', async () => {
       const url = characterUrlInput.value.trim();
       const jsonText = characterJsonInput?.value.trim() || '';
@@ -1236,25 +1253,61 @@ export function attachTranslatorSettingsEvents() {
         updateProgress(60, 'Descargando avatar...');
         const imageBlob = await downloadImage(avatarUrl);
 
-        updateProgress(75, 'Construyendo PNG con la tarjeta...');
-        const { buildCharacterCardPng } = await import('./characterImporter.js');
-        const pngBlob = await buildCharacterCardPng(imageBlob, card);
-        const filename = `${card.data.name.replace(/[/\\?%*:|"<>]/g, '_')}.png`;
+        const baseName = card.data.name.replace(/[/\\?%*:|"<>]/g, '_');
+        const wantCharx = importFormatSelect?.value === 'charx';
+
+        let outputBlob;
+        let filename;
+
+        if (wantCharx) {
+          // CharX: el avatar y las imágenes del mensaje inicial se embeben en
+          // el propio archivo, así la tarjeta no depende de URLs externas.
+          const embedded = result.embeddedImages ?? [];
+          const assets = [];
+
+          for (let i = 0; i < embedded.length; i++) {
+            const url = embedded[i];
+            try {
+              updateProgress(62 + Math.round(((i + 1) / embedded.length) * 10),
+                `Descargando imagen ${i + 1}/${embedded.length}...`);
+              const blob = await downloadImage(url);
+              assets.push({ name: `greeting_${i + 1}`, type: 'expression', blob, url });
+            } catch (err) {
+              console.warn('ST Translator: no se pudo embeber imagen del greeting', url, err);
+            }
+          }
+
+          updateProgress(75, 'Construyendo archivo CharX...');
+          const { buildCharacterCardCharX } = await import('./charxWriter.js');
+          outputBlob = await buildCharacterCardCharX(card, imageBlob, assets);
+          filename = `${baseName}.charx`;
+        } else {
+          updateProgress(75, 'Construyendo PNG con la tarjeta...');
+          const { buildCharacterCardPng } = await import('./characterImporter.js');
+          outputBlob = await buildCharacterCardPng(imageBlob, card);
+          filename = `${baseName}.png`;
+        }
 
         updateProgress(85, 'Guardando tarjeta...');
         const saveInfo = await window.STUniversalTranslator.saveBlobToDisk(
-          pngBlob,
+          outputBlob,
           filename,
           outputFolderInput?.value.trim() || ''
         );
 
         // Descarga adicional para el usuario (importación manual en ST)
-        const objUrl = URL.createObjectURL(pngBlob);
+        const objUrl = URL.createObjectURL(outputBlob);
         const link = document.createElement('a');
         link.href = objUrl;
         link.download = filename;
         link.click();
         URL.revokeObjectURL(objUrl);
+
+        // En CharX las imágenes del greeting ya van dentro; no se descargan sueltas
+        if (wantCharx && (result.embeddedImages ?? []).length) {
+          updateProgress(100, `Tarjeta CharX creada con ${result.embeddedImages.length} imagen(es) embebida(s).`);
+          return;
+        }
 
         // Galería: descargar las imágenes adicionales (desbloqueadas) una a una,
         // con un pequeño delay para no saturar el origen / el navegador.
@@ -1289,7 +1342,7 @@ export function attachTranslatorSettingsEvents() {
             statusText.textContent = `Tarjeta "${card.data.name}" creada. ${galleryDownloaded} imágenes de galería descargadas.`;
           }
         } else {
-          const sizeKb = Math.round(pngBlob.size / 1024);
+          const sizeKb = Math.round(outputBlob.size / 1024);
           statusText.textContent = `Tarjeta "${card.data.name}" creada (${sizeKb} KB)${saveInfo?.saved ? ` y guardada en ${saveInfo.path}` : ' y descargada'}.${galleryInfo && galleryInfo.lockedCount > 0 ? ` ${galleryInfo.lockedCount} imágenes de galería están bloqueadas (requieren gems).` : ''}`;
         }
         updateProgress(100);

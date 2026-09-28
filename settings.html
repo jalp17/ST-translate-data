@@ -163,6 +163,17 @@
             <label for="characterJsonInput">JSON alternativo (si el sitio bloquea CORS)</label>
             <textarea id="characterJsonInput" class="sttd-input" rows="4" placeholder='Pega aquí el JSON crudo del endpoint del personaje (DevTools del sitio → pestaña Red). Si está relleno, se usa en lugar del fetch.'></textarea>
           </div>
+
+          <div class="sttd-full-width">
+            <label for="importFormatSelect">Formato de salida</label>
+            <select id="importFormatSelect" class="sttd-input">
+              <option value="png" selected>PNG (tarjeta estándar)</option>
+              <option value="charx">CharX (incluye las imágenes dentro del archivo)</option>
+            </select>
+            <div class="sttd-hint" id="importFormatHint">
+              PNG: compatible con todas las apps. Las imágenes del mensaje inicial se referencian por URL.
+            </div>
+          </div>
         </div>
         <div class="button-row">
           <button id="importUrlButton" type="button" class="sttd-button primary">

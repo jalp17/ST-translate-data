@@ -84,6 +84,11 @@ export class CharacterProvider {
       // Tipsy). Se pueden embeber en un .charx para que la tarjeta no
       // dependa de un hosting externo.
       embeddedImages: f.embeddedImages || [],
+      // Assets declarados por el provider para empaquetar en un .charx.
+      // Cada uno: { name, type, url } con type ∈ expression|emotion|
+      // background|misc. La UI los descarga y buildCharacterCardCharX()
+      // los mete dentro del ZIP.
+      charxAssets: f.charxAssets || [],
     };
   }
 }
@@ -131,6 +136,11 @@ export class MoescapeProvider extends CharacterProvider {
       creator: raw.creator_name || '',
       avatarUrl: raw.thumbnail_photo?.url || raw.background_photos?.[0]?.url || null,
       backgroundUrls: (raw.background_photos || []).map((p) => p?.url).filter(Boolean),
+      // En .charx las fotos de fondo van como 'background'; ST las guarda en el
+      // directorio de fondos del personaje.
+      charxAssets: (raw.background_photos || [])
+        .map((p, i) => p?.url ? { name: `background_${i + 1}`, type: 'background', url: p.url } : null)
+        .filter(Boolean),
       extraInfo: [
         raw.nickname ? `nickname: ${raw.nickname}` : '',
         raw.content_rating ? `content_rating: ${raw.content_rating}` : '',
@@ -201,6 +211,11 @@ export class TipsyProvider extends CharacterProvider {
       // Imágenes del greeting, para poder embeberlas en un .charx y que la
       // tarjeta no dependa de que i.postimg.cn siga sirviéndolas.
       embeddedImages: extractMarkdownImageUrls(raw.greeting || ''),
+      // Como assets de CharX van como 'expression': ST las guarda en
+      // characters/<Personaje>/ con guiones, así el usuario puede renombrarlas
+      // a una emoción concreta si quiere usarlas de sprite.
+      charxAssets: extractMarkdownImageUrls(raw.greeting || '')
+        .map((url, i) => ({ name: `greeting_${i + 1}`, type: 'expression', url })),
       // content_type 1 = formato antiguo con imágenes markdown en el greeting;
       // 3 = formato nuevo estructurado, sin imágenes embebidas.
       contentType: raw.content_type ?? null,
@@ -442,6 +457,23 @@ export class JuicyChatProvider extends CharacterProvider {
 
     const unlockedUrls = unlockedPics.map((p) => p.clearUrl);
 
+    // Assets para .charx (opción B elegida):
+    //   characterPhoto            → 'background'  (imagen principal del chat)
+    //   albumList[].clearPictureUrl → 'misc'      (ST los guarda en
+    //   galleryList[].coverUrl                    user/images/<Personaje>/)
+    // No van como 'expression' porque no son reacciones emocionales sino
+    // escenas distintas: marcarlas así haría que ST las mostrara al azar.
+    const charxAssets = [];
+    if (raw.characterPhoto) {
+      charxAssets.push({ name: 'main_photo', type: 'background', url: raw.characterPhoto });
+    }
+    unlockedPics.forEach((pic, i) => {
+      charxAssets.push({ name: `album_${i + 1}`, type: 'misc', url: pic.clearUrl });
+    });
+    galleryCovers.forEach((url, i) => {
+      charxAssets.push({ name: `gallery_${i + 1}`, type: 'misc', url });
+    });
+
     return {
       name: raw.characterName || raw.nickname || 'JuicyChat character',
       description: desc,
@@ -472,6 +504,7 @@ export class JuicyChatProvider extends CharacterProvider {
         lockedCount,
         prompts: promptsFromUnlocked.length ? promptsFromUnlocked.join('\n') + promptsDebug : null,
       },
+      charxAssets,
     };
   }
 }

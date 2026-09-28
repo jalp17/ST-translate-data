@@ -1255,25 +1255,51 @@ export function attachTranslatorSettingsEvents() {
 
         const baseName = card.data.name.replace(/[/\\?%*:|"<>]/g, '_');
         const wantCharx = importFormatSelect?.value === 'charx';
+        let charxSummary = null;
 
         let outputBlob;
         let filename;
 
         if (wantCharx) {
-          // CharX: el avatar y las imágenes del mensaje inicial se embeben en
-          // el propio archivo, así la tarjeta no depende de URLs externas.
-          const embedded = result.embeddedImages ?? [];
+          // CharX: el avatar y los assets declarados por el provider se
+          // embeben en el propio archivo, así la tarjeta no depende de URLs
+          // externas. Cada provider dice cuáles son y de qué tipo
+          // (background / expression / misc) en result.charxAssets.
+          const declared = result.charxAssets ?? [];
           const assets = [];
+          // Tope para no generar .charx gigantes: 8 imágenes de JuicyChat
+          // ≈ 1,2 MB, pero su characterPhoto suele ser un GIF animado de
+          // varios MB que dispararía el tamaño del archivo.
+          const MAX_ASSETS = 25;
+          const MAX_TOTAL_BYTES = 8 * 1024 * 1024;
+          const MAX_SINGLE_BYTES = 3 * 1024 * 1024;
+          const toFetch = declared.slice(0, MAX_ASSETS);
+          let skippedByCount = declared.length - toFetch.length;
+          let totalBytes = 0;
 
-          for (let i = 0; i < embedded.length; i++) {
-            const url = embedded[i];
+          for (let i = 0; i < toFetch.length; i++) {
+            const spec = toFetch[i];
             try {
-              updateProgress(62 + Math.round(((i + 1) / embedded.length) * 10),
-                `Descargando imagen ${i + 1}/${embedded.length}...`);
-              const blob = await downloadImage(url);
-              assets.push({ name: `greeting_${i + 1}`, type: 'expression', blob, url });
+              // 60% avatar ya descargado, 60→90% repartido entre los assets
+              const pct = 60 + Math.round(((i + 1) / Math.max(1, toFetch.length)) * 30);
+              updateProgress(pct, `Descargando ${spec.name} (${i + 1}/${toFetch.length})...`);
+              const blob = await downloadImage(spec.url);
+
+              if (blob.size > MAX_SINGLE_BYTES) {
+                skippedByCount++;
+                console.debug(`ST Translator: ${spec.name} omitido (${(blob.size / 1048576).toFixed(1)} MB supera el límite por asset)`);
+                continue;
+              }
+              if (totalBytes + blob.size > MAX_TOTAL_BYTES) {
+                skippedByCount++;
+                console.debug('ST Translator: alcanzado el presupuesto total de tamaño del .charx');
+                break;
+              }
+
+              totalBytes += blob.size;
+              assets.push({ name: spec.name, type: spec.type, blob, url: spec.url });
             } catch (err) {
-              console.warn('ST Translator: no se pudo embeber imagen del greeting', url, err);
+              console.warn('ST Translator: no se pudo embeber asset', spec.url, err);
             }
           }
 
@@ -1281,6 +1307,7 @@ export function attachTranslatorSettingsEvents() {
           const { buildCharacterCardCharX } = await import('./charxWriter.js');
           outputBlob = await buildCharacterCardCharX(card, imageBlob, assets);
           filename = `${baseName}.charx`;
+          charxSummary = { total: declared.length, embedded: assets.length, skipped: skippedByCount };
         } else {
           updateProgress(75, 'Construyendo PNG con la tarjeta...');
           const { buildCharacterCardPng } = await import('./characterImporter.js');
@@ -1303,9 +1330,13 @@ export function attachTranslatorSettingsEvents() {
         link.click();
         URL.revokeObjectURL(objUrl);
 
-        // En CharX las imágenes del greeting ya van dentro; no se descargan sueltas
-        if (wantCharx && (result.embeddedImages ?? []).length) {
-          updateProgress(100, `Tarjeta CharX creada con ${result.embeddedImages.length} imagen(es) embebida(s).`);
+        // En CharX los assets ya van dentro del archivo, no se descargan sueltos
+        if (wantCharx && charxSummary && charxSummary.total > 0) {
+          const extra = charxSummary.skipped > 0
+            ? ` (${charxSummary.skipped} omitido(s) por tamaño)`
+            : '';
+          updateProgress(100,
+            `Tarjeta CharX creada con ${charxSummary.embedded}/${charxSummary.total} imagen(es) embebida(s)${extra}.`);
           return;
         }
 

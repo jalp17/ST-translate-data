@@ -188,8 +188,16 @@ export class TipsyProvider extends CharacterProvider {
       description: stripInlineImagesInTipsy(raw.description || raw.introduction || ''),
       personality: Array.isArray(raw.personality) ? raw.personality.filter(Boolean).join(', ') : (raw.personality || ''),
       scenario: stripInlineImagesInTipsy(raw.scenario || ''),
-      first_mes: stripInlineImagesInTipsy(raw.greeting || raw.first_message || ''),
+      // El greeting lleva las imágenes de la tarjeta embebidas como markdown
+      // ![](https://i.postimg.cc/...) apuntando a PostImages, que es público y
+      // carga en <img> sin CORS. Se conservan para que se vean en el chat de
+      // SillyTavern, que renderiza markdown igual que Tipsy.
+      first_mes: raw.greeting || raw.first_message || '',
       mes_example: stripInlineImagesInTipsy(raw.example_dialogue || raw.dialog_example || ''),
+      // content_type 1 = formato antiguo con imágenes markdown en el greeting;
+      // 3 = formato nuevo estructurado, sin imágenes embebidas.
+      greetingImages: (raw.greeting || '').match(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g) || [],
+      contentType: raw.content_type ?? null,
       // Tipsy no expone system_prompt ni post_history en el endpoint público
       systemPrompt: '',
       postHistory: '',
@@ -203,7 +211,10 @@ export class TipsyProvider extends CharacterProvider {
         raw.lang ? `language: ${raw.lang}` : '',
         raw.nsfw ? 'nsfw: yes' : '',
         typeof raw.character_type === 'number' ? `character_type: ${raw.character_type}` : '',
+        raw.content_type != null ? `content_type: ${raw.content_type}` : '',
         typeof raw.min_context_length === 'number' && raw.min_context_length > 0 ? `min_context_length: ${raw.min_context_length}` : '',
+        (raw.greeting || '').match(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/)
+          ? `imágenes en el primer mensaje: ${(raw.greeting.match(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g) || []).length}` : '',
       ].filter(Boolean).join('\n'),
     };
   }

@@ -1276,6 +1276,7 @@ export function attachTranslatorSettingsEvents() {
           const toFetch = declared.slice(0, MAX_ASSETS);
           let skippedByCount = declared.length - toFetch.length;
           let totalBytes = 0;
+          const failedAssets = [];
 
           for (let i = 0; i < toFetch.length; i++) {
             const spec = toFetch[i];
@@ -1287,18 +1288,20 @@ export function attachTranslatorSettingsEvents() {
 
               if (blob.size > MAX_SINGLE_BYTES) {
                 skippedByCount++;
-                console.debug(`ST Translator: ${spec.name} omitido (${(blob.size / 1048576).toFixed(1)} MB supera el límite por asset)`);
+                failedAssets.push(`${spec.name} (${(blob.size / 1048576).toFixed(1)} MB)`);
                 continue;
               }
               if (totalBytes + blob.size > MAX_TOTAL_BYTES) {
                 skippedByCount++;
-                console.debug('ST Translator: alcanzado el presupuesto total de tamaño del .charx');
+                failedAssets.push(`${spec.name} (presupuesto de tamaño agotado)`);
                 break;
               }
 
               totalBytes += blob.size;
               assets.push({ name: spec.name, type: spec.type, blob, url: spec.url });
             } catch (err) {
+              skippedByCount++;
+              failedAssets.push(`${spec.name} (${err.message.slice(0, 40)})`);
               console.warn('ST Translator: no se pudo embeber asset', spec.url, err);
             }
           }
@@ -1307,7 +1310,7 @@ export function attachTranslatorSettingsEvents() {
           const { buildCharacterCardCharX } = await import('./charxWriter.js');
           outputBlob = await buildCharacterCardCharX(card, imageBlob, assets);
           filename = `${baseName}.charx`;
-          charxSummary = { total: declared.length, embedded: assets.length, skipped: skippedByCount };
+          charxSummary = { total: declared.length, embedded: assets.length, skipped: skippedByCount, failed: failedAssets };
         } else {
           updateProgress(75, 'Construyendo PNG con la tarjeta...');
           const { buildCharacterCardPng } = await import('./characterImporter.js');
@@ -1332,11 +1335,14 @@ export function attachTranslatorSettingsEvents() {
 
         // En CharX los assets ya van dentro del archivo, no se descargan sueltos
         if (wantCharx && charxSummary && charxSummary.total > 0) {
-          const extra = charxSummary.skipped > 0
-            ? ` (${charxSummary.skipped} omitido(s) por tamaño)`
-            : '';
-          updateProgress(100,
-            `Tarjeta CharX creada con ${charxSummary.embedded}/${charxSummary.total} imagen(es) embebida(s)${extra}.`);
+          const parts = [`Tarjeta CharX creada con ${charxSummary.embedded}/${charxSummary.total} imagen(es) embebida(s)`];
+          if (charxSummary.failed?.length) {
+            parts.push(`${charxSummary.failed.length} no se pudieron embeber: ${charxSummary.failed.join(', ')}`);
+          }
+          if (charxSummary.failed?.length) {
+            parts.push('Sus URLs siguen en el mensaje, así que en el chat se verán si el hosting las sirve.');
+          }
+          updateProgress(100, parts.join('. ') + '.');
           return;
         }
 

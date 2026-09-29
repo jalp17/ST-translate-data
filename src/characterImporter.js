@@ -230,12 +230,14 @@ export class TipsyProvider extends CharacterProvider {
       extraInfo: [
         raw.gender ? `gender: ${raw.gender}` : '',
         raw.lang ? `language: ${raw.lang}` : '',
+        raw.is_translated ? `traducido automáticamente desde: ${raw.lang}` : '',
         raw.nsfw ? 'nsfw: yes' : '',
         typeof raw.character_type === 'number' ? `character_type: ${raw.character_type}` : '',
         raw.content_type != null ? `content_type: ${raw.content_type}` : '',
         typeof raw.min_context_length === 'number' && raw.min_context_length > 0 ? `min_context_length: ${raw.min_context_length}` : '',
         (raw.greeting || '').match(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/)
           ? `imágenes en el primer mensaje: ${(raw.greeting.match(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g) || []).length}` : '',
+        detectFlattenedGreeting(raw) ? 'AVISO: el texto llegó sin saltos de línea desde la API; Tipsy lo devolvió plano.' : '',
       ].filter(Boolean).join('\n'),
     };
   }
@@ -255,6 +257,20 @@ export function extractMarkdownImageUrls(text) {
     }
   }
   return urls;
+}
+
+/**
+ * Detecta si Tipsy devolvió el greeting completamente plano: texto largo sin
+ * ningún salto de línea ni markdown. Suele pasar con content_type 3, donde la
+ * traducción automática de Google ya aplanó la estructura antes de que la
+ *Character llegue a la API. No es recuperable desde el lado del cliente.
+ */
+function detectFlattenedGreeting(raw) {
+  const g = String(raw?.greeting || '');
+  if (g.length < 400) return false;
+  const hasBreaks = /\n/.test(g);
+  const hasMarkdown = /\*\*|^\s*[-*>#]|!\[[^\]]*\]\(/.test(g);
+  return !hasBreaks && !hasMarkdown;
 }
 
 /**

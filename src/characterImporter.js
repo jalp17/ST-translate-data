@@ -177,7 +177,15 @@ export class TipsyProvider extends CharacterProvider {
     if (payload?.code !== 0 || !payload?.data?.character) {
       throw new Error('Tipsy no devolvió datos de personaje válidos');
     }
-    return payload.data.character;
+
+    // Los personajes content_type 3 guardan el saludo con formato en campos
+    // hermanos de `character`, no dentro: data.rich_content trae el HTML
+    // completo (con <img> y <h1>) y data.images el listado de imágenes.
+    return {
+      ...payload.data.character,
+      _richContent: payload.data.rich_content || null,
+      _images: Array.isArray(payload.data.images) ? payload.data.images : [],
+    };
   }
 
   toCardFields(raw) {
@@ -197,28 +205,51 @@ export class TipsyProvider extends CharacterProvider {
       raw.pc_image_url,        // versión escritorio, si existe
     ].filter(Boolean);
 
+    // El saludo con formato. Los content_type 3 lo traen plano en `greeting`
+    // y el formato real solo existe en rich_content.greeting_rich_text (HTML),
+    // así que se convierte a markdown y se prefiere cuando está disponible.
+    const plainGreeting = raw.greeting || raw.first_message || '';
+    const richHtml = raw._richContent?.greeting_rich_text || '';
+    const richMarkdown = richHtml ? richHtmlToMarkdown(richHtml) : '';
+    const usedRich = Boolean(richMarkdown) && (!plainGreeting || richMarkdown.length > plainGreeting.length);
+    const firstMes = usedRich ? richMarkdown : plainGreeting;
+    // El saludo plano estaba realmente aplanado solo si no se pudo usar el rico
+    const greetingWasFlat = detectFlattenedGreeting(raw) && !usedRich;
+
+    // Imágenes: las del saludo con formato + las de data.images que no estén
+    // repetidas. data.images es el listado completo del personaje y suele
+    // traer más que las incrustadas en el texto.
+    const greetingImages = extractMarkdownImageUrls(firstMes);
+    const catalogImages = (raw._images ?? [])
+      .map((img) => img?.image_url)
+      .filter(Boolean);
+    const allImages = [...new Set([...greetingImages, ...catalogImages])];
+
     return {
       name: raw.nickname || raw.name || 'Tipsy character',
       description: stripInlineImagesInTipsy(raw.description || raw.introduction || ''),
       personality: Array.isArray(raw.personality) ? raw.personality.filter(Boolean).join(', ') : (raw.personality || ''),
       scenario: stripInlineImagesInTipsy(raw.scenario || ''),
-      // El greeting lleva las imágenes de la tarjeta embebidas como markdown
-      // ![](https://i.postimg.cc/...) apuntando a PostImages, que es público y
-      // carga en <img> sin CORS. Se conservan para que se vean en el chat de
-      // SillyTavern, que renderiza markdown igual que Tipsy.
-      first_mes: raw.greeting || raw.first_message || '',
+      // El saludo lleva las imágenes de la tarjeta embebidas como markdown
+      // ![](https://...) apuntando a hosts públicos (i.postimg.cc, i.ibb.co).
+      // SillyTavern renderiza markdown igual que Tipsy, así que se conserva.
+      first_mes: firstMes,
       mes_example: stripInlineImagesInTipsy(raw.example_dialogue || raw.dialog_example || ''),
-      // Imágenes del greeting, para poder embeberlas en un .charx y que la
-      // tarjeta no dependa de que i.postimg.cn siga sirviéndolas.
-      embeddedImages: extractMarkdownImageUrls(raw.greeting || ''),
+      // Imágenes del saludo, para poder embeberlas en un .charx y que la
+      // tarjeta no dependa de que el hosting siga sirviéndolas.
+      embeddedImages: greetingImages,
       // Como assets de CharX van como 'expression': ST las guarda en
       // characters/<Personaje>/ con guiones, así el usuario puede renombrarlas
       // a una emoción concreta si quiere usarlas de sprite.
-      charxAssets: extractMarkdownImageUrls(raw.greeting || '')
-        .map((url, i) => ({ name: `greeting_${i + 1}`, type: 'expression', url })),
-      // content_type 1 = formato antiguo con imágenes markdown en el greeting;
-      // 3 = formato nuevo estructurado, sin imágenes embebidas.
+      charxAssets: allImages.map((url, i) => ({
+        name: i < greetingImages.length ? `greeting_${i + 1}` : `image_${i + 1}`,
+        type: 'expression',
+        url,
+      })),
+      // content_type 1 = markdown en `greeting`; 3 = texto plano y el formato
+      // solo en data.rich_content.greeting_rich_text.
       contentType: raw.content_type ?? null,
+      usedRichContent: usedRich,
       // Tipsy no expone system_prompt ni post_history en el endpoint público
       systemPrompt: '',
       postHistory: '',
@@ -234,10 +265,9 @@ export class TipsyProvider extends CharacterProvider {
         raw.nsfw ? 'nsfw: yes' : '',
         typeof raw.character_type === 'number' ? `character_type: ${raw.character_type}` : '',
         raw.content_type != null ? `content_type: ${raw.content_type}` : '',
-        typeof raw.min_context_length === 'number' && raw.min_context_length > 0 ? `min_context_length: ${raw.min_context_length}` : '',
-        (raw.greeting || '').match(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/)
-          ? `imágenes en el primer mensaje: ${(raw.greeting.match(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g) || []).length}` : '',
-        detectFlattenedGreeting(raw) ? 'AVISO: el texto llegó sin saltos de línea desde la API; Tipsy lo devolvió plano.' : '',
+        usedRich ? 'saludo tomado de data.rich_content (formato original recuperado)' : '',
+        greetingWasFlat ? 'AVISO: el texto llegó sin saltos de línea desde la API y no había rich_content; Tipsy lo devolvió plano.' : '',
+        greetingImages.length ? `imágenes en el primer mensaje: ${greetingImages.length}` : '',
       ].filter(Boolean).join('\n'),
     };
   }
@@ -245,6 +275,83 @@ export class TipsyProvider extends CharacterProvider {
 
 function stripInlineImagesInTipsy(s) {
   return (s || '').replace(/!\[[^\]]*\]\(https?:\/\/[^)]+\)/g, '').trim();
+}
+
+/**
+ * Convierte el HTML rico de `rich_content.greeting_rich_text` a markdown.
+ *
+ * Tipsy guarda el saludo en dos sitios según la versión del personaje:
+ *  - content_type 1 → data.character.greeting ya viene en markdown
+ *  - content_type 3 → data.character.greeting viene aplastado en una línea y
+ *    el formato real (etiquetas, párrafos e imágenes) queda solo en
+ *    data.rich_content.greeting_rich_text, que es HTML completo.
+ *
+ * SillyTavern renderiza markdown en los mensajes, así que convertimos a
+ * markdown en vez de dejar HTML suelto (DOMPurify le quitaría el <style>).
+ */
+export function richHtmlToMarkdown(html) {
+  if (!html || typeof html !== 'string') return '';
+
+  let text = html;
+
+  // Descartar bloques que no aportan al texto del mensaje
+  text = text.replace(/<style[\s\S]*?<\/style>/gi, '');
+  text = text.replace(/<script[\s\S]*?<\/script>/gi, '');
+  text = text.replace(/<head[\s\S]*?<\/head>/gi, '');
+  text = text.replace(/<meta[^>]*>/gi, '');
+  text = text.replace(/<link[^>]*>/gi, '');
+  text = text.replace(/<!--[\s\S]*?-->/g, '');
+
+  // Imágenes: <img ... src="URL" ...> → ![](URL)
+  text = text.replace(/<img\b[^>]*>/gi, (tag) => {
+    const src = tag.match(/\bsrc\s*=\s*["']([^"']+)["']/i)?.[1];
+    return src ? `![](${src})` : '';
+  });
+
+  // Encabezados
+  text = text.replace(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi, '\n\n# $1\n\n');
+  text = text.replace(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi, '\n\n## $1\n\n');
+  text = text.replace(/<h3\b[^>]*>([\s\S]*?)<\/h3>/gi, '\n\n### $1\n\n');
+  text = text.replace(/<h[4-6]\b[^>]*>([\s\S]*?)<\/h[4-6]>/gi, '\n\n#### $1\n\n');
+
+  // Énfasis
+  text = text.replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, '**$2**');
+  text = text.replace(/<(em|i)\b[^>]*>([\s\S]*?)<\/\1>/gi, '*$2*');
+  text = text.replace(/<(del|s|strike)\b[^>]*>([\s\S]*?)<\/\1>/gi, '~~$2~~');
+
+  // Párrafos y saltos
+  text = text.replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, '\n\n$1\n\n');
+  text = text.replace(/<br\s*\/?>/gi, '\n');
+  text = text.replace(/<hr\s*\/?>/gi, '\n\n---\n\n');
+
+  // Listas
+  text = text.replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, '\n- $1');
+  text = text.replace(/<\/?(ul|ol)\b[^>]*>/gi, '\n');
+
+  // Citas
+  text = text.replace(/<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/gi, '\n\n> $1\n\n');
+
+  // Cualquier etiqueta suelta
+  text = text.replace(/<\/?[a-z][^>]*>/gi, '');
+
+  // Entidades HTML comunes y numéricas
+  const entities = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#34;': '"', '&#39;': "'", '&apos;': "'", '&nbsp;': ' ', '&hellip;': '…', '&mdash;': '—', '&ndash;': '–' };
+  for (const [ent, ch] of Object.entries(entities)) {
+    text = text.replaceAll(ent, ch);
+  }
+  // Resto de entidades numéricas (&#39;, &#8220;, …)
+  text = text.replace(/&#(\d+);/g, (_, code) => {
+    try {
+      return String.fromCodePoint(Number(code));
+    } catch {
+      return _;
+    }
+  });
+
+  // Colapsar líneas en blanco repetidas y espacios sobrantes
+  text = text.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+
+  return text;
 }
 
 /** Extrae las URLs de imágenes markdown de un texto, sin repetir y en orden. */

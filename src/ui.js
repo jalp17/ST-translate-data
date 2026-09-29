@@ -982,43 +982,52 @@ export function attachTranslatorSettingsEvents() {
    * y restaura al terminar (éxito o error).
    */
   /**
-   * Descarga una imagen usando, en orden: fetch directo → proxy CORS de ST.
-   * Tipsy (img.tipsy.chat) no envía CORS headers, así que el fetch directo
-   * suele fallar desde el navegador; el proxy de ST (/proxy/:url) lo burla
-   * porque la petición la hace el servidor de ST (server-to-server).
+   * Descarga una imagen probando, en orden:
+   *   1. fetch directo
+   *   2. proxy CORS de SillyTavern (/proxy/:url)
+   *   3. images.weserv.nl, proxy de imágenes público
    *
-   * @param {string} imageUrl URL original de la imagen
-   * @returns {Promise<Blob>} mesma blobs, con HTTP status content-type preservado
+   * El paso 3 existe porque algunos hostings (i.ibb.co) cierran la conexión
+   * según la IP de origen, no según el navegador: no los carga ni el proxy de
+   * ST ni el <img> del chat desde una IP de servidor. images.weserv.nl los
+   * descarga desde su propia IP y los devuelve como WebP.
+   *
+   * @param {string} imageUrl
+   * @returns {Promise<Blob>}
    */
   async function downloadImage(imageUrl) {
-    // 1. Intento directo (funciona si el CDN si emite CORS headers)
-    try {
-      const r = await fetch(imageUrl);
-      if (r.ok) return await r.blob();
-      throw new Error(`HTTP ${r.status}`);
-    } catch (directError) {
-      console.debug('ST Translator: fallo fetch directo, probando proxy CORS de ST', directError.message);
+    const viaWeserv = (u) =>
+      `https://images.weserv.nl/?url=${encodeURIComponent(u.replace(/^https?:\/\//, ''))}`;
+
+    const attempts = [
+      { label: 'directo', run: () => fetch(imageUrl) },
+      { label: 'proxy ST', run: () => fetch(`/proxy/${encodeURIComponent(imageUrl)}`) },
+      { label: 'images.weserv.nl', run: () => fetch(viaWeserv(imageUrl)) },
+    ];
+
+    const errores = [];
+    for (const attempt of attempts) {
+      try {
+        const r = await attempt.run();
+        if (r.ok) {
+          const blob = await r.blob();
+          // Un proxy de error puede devolver 200 con HTML: comprobar que sea imagen
+          if (blob.type.startsWith('image/') || blob.type === 'application/octet-stream') {
+            if (attempt.label !== 'directo') {
+              console.debug(`ST Translator: imagen obtenida vía ${attempt.label}`);
+            }
+            return blob;
+          }
+          errores.push(`${attempt.label}: respuesta no-imagen (${blob.type})`);
+        } else {
+          errores.push(`${attempt.label}: HTTP ${r.status}`);
+        }
+      } catch (e) {
+        errores.push(`${attempt.label}: ${e.message}`);
+      }
     }
 
-    // 2. Fallback: proxy CORS del servidor de SillyTavern
-    // Ruta exacta: /proxy/:url(*) -> src/server-main.js:258
-    const proxyUrl = `/proxy/${encodeURIComponent(imageUrl)}`;
-    try {
-      const r = await fetch(proxyUrl);
-      if (!r.ok) {
-        const msg = await r.text();
-        if (r.status === 404 && msg.includes('CORS proxy is disabled')) {
-          throw new Error(
-            'CORS proxy de SillyTavern está deshabilitado (necesario para descargar imágenes de sitios sin CORS habilitado). ' +
-            'Habilítalo en SillyTavern/config.yaml (enableCorsProxy: true) y reinicia, o descarga la imagen manualmente.'
-          );
-        }
-        throw new Error(`Proxy respondió ${r.status}: ${msg.slice(0, 150)}`);
-      }
-      return await r.blob();
-    } catch (proxyError) {
-      throw new Error(`No se pudo descargar la imagen (${proxyError.message}). URL: ${imageUrl}`);
-    }
+    throw new Error(`No se pudo descargar (${errores.join('; ')})`);
   }
 
   function withBusyState(button, busyLabel, handler) {
@@ -1267,12 +1276,12 @@ export function attachTranslatorSettingsEvents() {
           // (background / expression / misc) en result.charxAssets.
           const declared = result.charxAssets ?? [];
           const assets = [];
-          // Tope para no generar .charx gigantes: 8 imágenes de JuicyChat
-          // ≈ 1,2 MB, pero su characterPhoto suele ser un GIF animado de
-          // varios MB que dispararía el tamaño del archivo.
-          const MAX_ASSETS = 25;
-          const MAX_TOTAL_BYTES = 8 * 1024 * 1024;
-          const MAX_SINGLE_BYTES = 3 * 1024 * 1024;
+          // Límites generosos para guardar el álbum completo a calidad
+          // original: las imágenes 4K/8K rondan 2-5 MB, así que 12 MB por
+          // asset y 60 MB en total caben de sobra. No se recomprime nada.
+          const MAX_ASSETS = 40;
+          const MAX_TOTAL_BYTES = 60 * 1024 * 1024;
+          const MAX_SINGLE_BYTES = 12 * 1024 * 1024;
           const toFetch = declared.slice(0, MAX_ASSETS);
           let skippedByCount = declared.length - toFetch.length;
           let totalBytes = 0;
@@ -1293,7 +1302,7 @@ export function attachTranslatorSettingsEvents() {
               }
               if (totalBytes + blob.size > MAX_TOTAL_BYTES) {
                 skippedByCount++;
-                failedAssets.push(`${spec.name} (presupuesto de tamaño agotado)`);
+                failedAssets.push(`${spec.name} (se alcanzó el límite total)`);
                 break;
               }
 
@@ -1301,7 +1310,7 @@ export function attachTranslatorSettingsEvents() {
               assets.push({ name: spec.name, type: spec.type, blob, url: spec.url });
             } catch (err) {
               skippedByCount++;
-              failedAssets.push(`${spec.name} (${err.message.slice(0, 40)})`);
+              failedAssets.push(`${spec.name} (${err.message.slice(0, 60)})`);
               console.warn('ST Translator: no se pudo embeber asset', spec.url, err);
             }
           }
@@ -1310,7 +1319,10 @@ export function attachTranslatorSettingsEvents() {
           const { buildCharacterCardCharX } = await import('./charxWriter.js');
           outputBlob = await buildCharacterCardCharX(card, imageBlob, assets);
           filename = `${baseName}.charx`;
-          charxSummary = { total: declared.length, embedded: assets.length, skipped: skippedByCount, failed: failedAssets };
+          charxSummary = {
+            total: declared.length, embedded: assets.length,
+            skipped: skippedByCount, failed: failedAssets,
+          };
         } else {
           updateProgress(75, 'Construyendo PNG con la tarjeta...');
           const { buildCharacterCardPng } = await import('./characterImporter.js');

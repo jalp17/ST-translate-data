@@ -189,6 +189,16 @@ function extensionFor(mime, url) {
   return match ? match[1].toLowerCase() : 'png';
 }
 
+/**
+ * Expuesta porque quien referencia un asset en el texto de la tarjeta tiene
+ * que usar exactamente la misma extensión que quedará declarada en el charx.
+ * Si divergen, SillyTavern guardará el archivo con una extensión y el
+ * mensaje apuntará a otra y la imagen se romperá.
+ */
+export function charxAssetExtension(mime, url) {
+  return extensionFor(mime, url);
+}
+
 function safeAssetName(name, fallback) {
   const cleaned = String(name || '')
     .toLowerCase()

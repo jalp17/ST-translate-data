@@ -413,6 +413,59 @@ export function inlineImagesAsDataUris(text, map, maxBytes = 600 * 1024) {
   return { text: result, inlined, kept, bytes };
 }
 
+/**
+ * Replica el `sanitize-filename` que usa ST al importar (src/endpoints/characters.js
+ * hace `card.data.name = sanitize(card.data.name)` y usa ese nombre como carpeta
+ * de sprites). Si no coinciden, la ruta generada no existiría.
+ */
+export function sanitizeSTFileName(name) {
+  return String(name ?? '')
+    // caracteres de control + los ilegales en la lista de sanitize-filename
+    .replace(/[\u0000-\u001F\u0080-\u009F<>:"/\\|?*]/g, '')
+    // puntos y espacios al final (Windows no los permite)
+    .replace(/[. ]+$/g, '')
+    .trim();
+}
+
+/**
+ * Replica `getCharXAssetBaseName(name, fallback, useHyphens=true)` de
+ * src/charx.js, que es como ST nombra el archivo de un sprite al importar.
+ * Los sprites usan guiones, no guiones bajos, para que el extractor de
+ * etiquetas los separe bien.
+ */
+export function charxSpriteBaseName(name, fallback = 'sprite') {
+  const cleaned = String(name ?? '').trim();
+  if (!cleaned) {
+    return fallback.toLowerCase();
+  }
+  return cleaned
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Construye la ruta por la que ST servirá un sprite del personaje tras
+ * importar el .charx.
+ *
+ * Verificado contra la instancia en marcha: ST sirve `data/` con un router
+ * dedicado (src/users.js:1213-1219, `router.use('/characters/*', ...)`), no
+ * por express.static, y las subcarpetas también responden. Una ruta relativa
+ * no es "media externa" (chats.js isExternalUrl exige '://' o '//' al
+ * principio), así que sobrevive a forbid_external_media.
+ *
+ * @param {string} charName Nombre de la tarjeta tal como aparecerá en ST
+ * @param {string} assetName Nombre del asset declarado en el charx
+ * @param {string} ext Extensión del archivo (sin punto)
+ * @returns {string} p.ej. /characters/A%20Mother's%20Envy/greeting-1.jpg
+ */
+export function buildSpriteReference(charName, assetName, ext) {
+  const folder = sanitizeSTFileName(charName);
+  const base = charxSpriteBaseName(assetName);
+  const folderEnc = encodeURIComponent(folder);
+  return `/characters/${folderEnc}/${base}.${String(ext || 'png').toLowerCase()}`;
+}
+
 /** Extrae las URLs de imágenes markdown de un texto, sin repetir y en orden. */
 export function extractMarkdownImageUrls(text) {
   const matches = String(text || '').matchAll(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g);

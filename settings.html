@@ -175,14 +175,16 @@
             </div>
 
             <div class="sttd-full-width" style="margin-top: 0.75rem;">
-              <label class="sttd-checkbox-label" for="inlineImagesCheckbox">
-                <input type="checkbox" id="inlineImagesCheckbox" />
-                <span>Incrustar las imágenes del mensaje en la tarjeta</span>
+              <label class="sttd-checkbox-label" for="spriteReferencesCheckbox">
+                <input type="checkbox" id="spriteReferencesCheckbox" checked />
+                <span>Enlazar las imágenes a los sprites del personaje</span>
               </label>
               <div class="sttd-hint">
-                Reescribe las URLs del primer mensaje como <code>data:</code> para que la imagen
-                va incrustada y no dependa de que el hosting externo siga disponible.
-                Solo para imágenes pequeñas (≤ 600 KB): engorda la tarjeta.
+                Reescribe las imágenes del mensaje para que apunten al archivo que
+                SillyTavern extrae del propio <code>.charx</code>. La tarjeta sigue
+                siendo pequeña y las imágenes no dependen de ningún hosting externo.
+                Desmárcalo para incrustarlas como <code>data:</code> si vas a mover
+                la tarjeta a otra instalación.
               </div>
             </div>
           </div>

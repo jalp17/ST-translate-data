@@ -141,7 +141,7 @@ export function attachTranslatorSettingsEvents() {
   const importUrlButton = document.getElementById('importUrlButton');
   const importFormatSelect = document.getElementById('importFormatSelect');
   const importFormatHint = document.getElementById('importFormatHint');
-  const inlineImagesCheckbox = document.getElementById('inlineImagesCheckbox');
+  const spriteReferencesCheckbox = document.getElementById('spriteReferencesCheckbox');
   const chatExportSiteSelect = document.getElementById('chatExportSiteSelect');
   const chatExportSiteNote = document.getElementById('chatExportSiteNote');
   const copyChatScriptButton = document.getElementById('copyChatScriptButton');
@@ -1292,7 +1292,10 @@ export function attachTranslatorSettingsEvents() {
           const uriByUrl = new Map();
           // Reescribir el mensaje con data URI engorda el card.json (~33% más),
           // así que solo se hace para imágenes pequeñas y si el usuario lo pide.
-          const inlineImages = inlineImagesCheckbox?.checked ?? false;
+          // Solo se calcula el data URI si el usuario ha desmarcado la
+          // referencia a sprite (modo portátil), para no gastar CPU y memoria
+          // en imágenes que van a quedar enlazadas a un archivo local.
+          const useDataUri = !(spriteReferencesCheckbox?.checked ?? true);
           const MAX_INLINE_BYTES = 600 * 1024;
 
           for (let i = 0; i < toFetch.length; i++) {
@@ -1319,7 +1322,7 @@ export function attachTranslatorSettingsEvents() {
 
               // Calcular el data URI solo si vamos a incrustarlo: no merece
               // gastar CPU y memoria en imágenes que se quedarán con la URL.
-              if (inlineImages && blob.size <= MAX_INLINE_BYTES) {
+              if (useDataUri && blob.size <= MAX_INLINE_BYTES) {
                 try {
                   const { blobToDataUri } = await import('./characterImporter.js');
                   uriByUrl.set(spec.url, { dataUri: await blobToDataUri(blob), size: blob.size });
@@ -1334,15 +1337,44 @@ export function attachTranslatorSettingsEvents() {
             }
           }
 
-          // Reescribir el primer mensaje para que use las imágenes incrustadas
-          // en vez de las URLs remotas, cuando se dispone de data URI válido.
+          // Reescribir las imágenes del mensaje.
+          // Por defecto apuntan al sprite que ST extraerá del propio .charx
+          // (ruta relativa servida por ST, sin base64 ni dependencia externa).
+          // Con la casilla marcada se incrustan como data URI, que es lo único
+          // que sobrevive si mueves la tarjeta a otra instalación.
           let inlineStats = null;
-          if (uriByUrl.size) {
+          if (spriteReferencesCheckbox?.checked) {
+            try {
+              const { buildSpriteReference } = await import('./characterImporter.js');
+              // La extensión DEBE ser la misma que quedará declarada en el
+              // charx, o ST guardará el archivo con una extensión y el mensaje
+              // apuntará a otra.
+              const { charxAssetExtension } = await import('./charxWriter.js');
+              const byUrl = new Map();
+              for (const a of assets) {
+                const ext = charxAssetExtension(a.blob.type, a.url);
+                byUrl.set(a.url, buildSpriteReference(card.data.name, a.name, ext));
+              }
+              let rewritten = 0;
+              card.data.first_mes = String(card.data.first_mes).replace(
+                /!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g,
+                (match, url) => {
+                  const path = byUrl.get(url);
+                  if (!path) return match;
+                  rewritten++;
+                  return match.replace(url, path);
+                }
+              );
+              inlineStats = { inlined: rewritten, kept: 0, mode: 'sprite' };
+            } catch (e) {
+              console.warn('ST Translator: no se pudieron enlazar las referencias a sprite', e);
+            }
+          } else if (uriByUrl.size) {
             try {
               const { inlineImagesAsDataUris } = await import('./characterImporter.js');
               const res = inlineImagesAsDataUris(card.data.first_mes, uriByUrl, MAX_INLINE_BYTES);
               card.data.first_mes = res.text;
-              inlineStats = res;
+              inlineStats = { ...res, mode: 'datauri' };
             } catch (e) {
               console.warn('ST Translator: no se pudieron incrustar las imágenes en el mensaje', e);
             }

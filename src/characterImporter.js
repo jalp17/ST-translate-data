@@ -354,6 +354,65 @@ export function richHtmlToMarkdown(html) {
   return text;
 }
 
+/**
+ * Convierte un Blob en un data URI base64. Se hace por trozos porque
+ * btoa(String.fromCharCode(...array)) revienta la pila con blobs de MB.
+ * @param {Blob} blob
+ * @returns {Promise<string>} data:image/jpeg;base64,...
+ */
+export async function blobToDataUri(blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const CHUNK = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return `data:${blob.type || 'image/png'};base64,${btoa(binary)}`;
+}
+
+/**
+ * Sustituye las referencias `![](url)` de un texto por `![](data:...)`
+ * usando los data URI ya calculados.
+ *
+ * Por qué: SillyTavern solo sabe resolver `embedded://` al importar el .charx
+ * para extraer los archivos, nunca reescribe el texto de los mensajes. La única
+ * forma de que un mensaje use la imagen incrustada en vez de la URL es
+ * llevarla dentro como data URI. Verificado que el DOMPurify de ST acepta
+ * `data:` en el src de <img>, así que la imagen se ve igual en el chat.
+ *
+ * Las imágenes que superan maxBytes se dejan con su URL: convertirlas
+ * inflaría el card.json (base64 suma ~33%) sin ganancia práctica.
+ *
+ * @param {string} text Texto con markdown
+ * @param {Map<string, {dataUri: string, size: number}>} map url → data URI
+ * @param {number} maxBytes Tamaño máximo del blob original para incrustar
+ * @returns {{text: string, inlined: number, kept: number, bytes: number}}
+ */
+export function inlineImagesAsDataUris(text, map, maxBytes = 600 * 1024) {
+  let inlined = 0;
+  let kept = 0;
+  let bytes = 0;
+
+  const result = String(text || '').replace(
+    /!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g,
+    (match, url) => {
+      const entry = map.get(url);
+      if (!entry?.dataUri) {
+        return match;
+      }
+      if (entry.size > maxBytes) {
+        kept++;
+        return match;
+      }
+      inlined++;
+      bytes += entry.size;
+      return match.replace(url, entry.dataUri);
+    }
+  );
+
+  return { text: result, inlined, kept, bytes };
+}
+
 /** Extrae las URLs de imágenes markdown de un texto, sin repetir y en orden. */
 export function extractMarkdownImageUrls(text) {
   const matches = String(text || '').matchAll(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g);

@@ -141,6 +141,7 @@ export function attachTranslatorSettingsEvents() {
   const importUrlButton = document.getElementById('importUrlButton');
   const importFormatSelect = document.getElementById('importFormatSelect');
   const importFormatHint = document.getElementById('importFormatHint');
+  const inlineImagesCheckbox = document.getElementById('inlineImagesCheckbox');
   const chatExportSiteSelect = document.getElementById('chatExportSiteSelect');
   const chatExportSiteNote = document.getElementById('chatExportSiteNote');
   const copyChatScriptButton = document.getElementById('copyChatScriptButton');
@@ -1286,6 +1287,13 @@ export function attachTranslatorSettingsEvents() {
           let skippedByCount = declared.length - toFetch.length;
           let totalBytes = 0;
           const failedAssets = [];
+          // url → data URI, para poder reescribir el texto del mensaje y que
+          // use la imagen incrustada en vez de la URL remota
+          const uriByUrl = new Map();
+          // Reescribir el mensaje con data URI engorda el card.json (~33% más),
+          // así que solo se hace para imágenes pequeñas y si el usuario lo pide.
+          const inlineImages = inlineImagesCheckbox?.checked ?? false;
+          const MAX_INLINE_BYTES = 600 * 1024;
 
           for (let i = 0; i < toFetch.length; i++) {
             const spec = toFetch[i];
@@ -1308,10 +1316,35 @@ export function attachTranslatorSettingsEvents() {
 
               totalBytes += blob.size;
               assets.push({ name: spec.name, type: spec.type, blob, url: spec.url });
+
+              // Calcular el data URI solo si vamos a incrustarlo: no merece
+              // gastar CPU y memoria en imágenes que se quedarán con la URL.
+              if (inlineImages && blob.size <= MAX_INLINE_BYTES) {
+                try {
+                  const { blobToDataUri } = await import('./characterImporter.js');
+                  uriByUrl.set(spec.url, { dataUri: await blobToDataUri(blob), size: blob.size });
+                } catch (e) {
+                  console.debug('ST Translator: no se pudo generar el data URI', spec.url, e);
+                }
+              }
             } catch (err) {
               skippedByCount++;
               failedAssets.push(`${spec.name} (${err.message.slice(0, 60)})`);
               console.warn('ST Translator: no se pudo embeber asset', spec.url, err);
+            }
+          }
+
+          // Reescribir el primer mensaje para que use las imágenes incrustadas
+          // en vez de las URLs remotas, cuando se dispone de data URI válido.
+          let inlineStats = null;
+          if (uriByUrl.size) {
+            try {
+              const { inlineImagesAsDataUris } = await import('./characterImporter.js');
+              const res = inlineImagesAsDataUris(card.data.first_mes, uriByUrl, MAX_INLINE_BYTES);
+              card.data.first_mes = res.text;
+              inlineStats = res;
+            } catch (e) {
+              console.warn('ST Translator: no se pudieron incrustar las imágenes en el mensaje', e);
             }
           }
 
@@ -1321,7 +1354,7 @@ export function attachTranslatorSettingsEvents() {
           filename = `${baseName}.charx`;
           charxSummary = {
             total: declared.length, embedded: assets.length,
-            skipped: skippedByCount, failed: failedAssets,
+            skipped: skippedByCount, failed: failedAssets, inline: inlineStats,
           };
         } else {
           updateProgress(75, 'Construyendo PNG con la tarjeta...');
@@ -1348,11 +1381,15 @@ export function attachTranslatorSettingsEvents() {
         // En CharX los assets ya van dentro del archivo, no se descargan sueltos
         if (wantCharx && charxSummary && charxSummary.total > 0) {
           const parts = [`Tarjeta CharX creada con ${charxSummary.embedded}/${charxSummary.total} imagen(es) embebida(s)`];
-          if (charxSummary.failed?.length) {
-            parts.push(`${charxSummary.failed.length} no se pudieron embeber: ${charxSummary.failed.join(', ')}`);
+          const inl = charxSummary.inline;
+          if (inl?.inlined) {
+            parts.push(`${inl.inlined} imagen(es) del mensaje quedaron incrustadas (${Math.round(inl.bytes / 1024)} KB)`);
+          }
+          if (inl?.kept) {
+            parts.push(`${inl.kept} sin incrustar por tamaño, siguen con su URL`);
           }
           if (charxSummary.failed?.length) {
-            parts.push('Sus URLs siguen en el mensaje, así que en el chat se verán si el hosting las sirve.');
+            parts.push(`${charxSummary.failed.length} no se pudieron embeber: ${charxSummary.failed.join(', ')}`);
           }
           updateProgress(100, parts.join('. ') + '.');
           return;

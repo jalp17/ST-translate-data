@@ -137,6 +137,11 @@ export function attachTranslatorSettingsEvents() {
   const refreshLorebookListButton = document.getElementById('refreshLorebookListButton');
   const lorebookStatusText = document.getElementById('lorebookStatusText');
   const characterUrlInput = document.getElementById('characterUrlInput');
+  const batchUrlsInput = document.getElementById('batchUrlsInput');
+  const batchConcurrencySelect = document.getElementById('batchConcurrencySelect');
+  const batchProgressWrap = document.getElementById('batchProgressWrap');
+  const batchSummaryText = document.getElementById('batchSummaryText');
+  const batchList = document.getElementById('batchList');
   const characterJsonInput = document.getElementById('characterJsonInput');
   const importUrlButton = document.getElementById('importUrlButton');
   const importFormatSelect = document.getElementById('importFormatSelect');
@@ -1224,9 +1229,115 @@ export function attachTranslatorSettingsEvents() {
       updateFormatHint();
     }
 
+    /**
+     * Importa varias URLs en paralelo, una a una por personaje, sin bloquear
+     * la UI. Reutiliza la misma extracción que el importador individual.
+     * @returns {Promise<Array>}
+     */
+    async function importBatch(urls, concurrency) {
+      const { buildSpriteReference } = await import('./characterImporter.js');
+      const { charxAssetExtension, buildCharacterCardCharX } = await import('./charxWriter.js');
+      const { importCharacterFromUrl } = await import('./characterImporter.js');
+
+      const results = new Array(urls.length);
+      let cursor = 0;
+      let finished = 0;
+
+      const render = () => {
+        if (!batchList || !batchSummaryText) return;
+        batchSummaryText.textContent =
+          `${finished}/${urls.length} procesados · ${results.filter(Boolean).filter((r) => r.ok).length} correctos`;
+        batchList.innerHTML = results.filter(Boolean).map((r) => `
+          <div class="sttd-batch-row ${r.ok ? 'ok' : 'fail'}" title="${r.error || ''}">
+            <span class="sttd-batch-name">${r.ok ? '' : '✗ '}${r.name}</span>
+            <span class="sttd-batch-meta">${r.ok ? `${r.refs} refs · ${r.imgs}/${r.total} imgs` : (r.error || '').slice(0, 40)}</span>
+          </div>`).join('');
+      };
+
+      const worker = async () => {
+        while (true) {
+          const i = cursor++;
+          if (i >= urls.length) return;
+          try {
+            const out = await importCharacterFromUrl(urls[i]);
+            const card = out.card;
+            const name = card.data.name;
+
+            const avatar = await downloadImage(out.avatarUrl);
+            const assets = [];
+            const byUrl = new Map();
+            for (const a of out.charxAssets || []) {
+              try {
+                const blob = await downloadImage(a.url);
+                assets.push({ name: a.name, type: a.type || 'expression', blob, url: a.url });
+                byUrl.set(a.url, { name: a.name, ext: charxAssetExtension(blob.type, a.url) });
+              } catch (e) {
+                console.warn(`Lote: no se pudo baixar ${a.name}`, e);
+              }
+            }
+
+            let refs = 0;
+            card.data.first_mes = String(card.data.first_mes).replace(
+              /!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g,
+              (m, u) => {
+                const f = byUrl.get(u);
+                if (!f) return m;
+                refs++;
+                return m.replace(u, buildSpriteReference(name, f.name, f.ext));
+              },
+            );
+
+            const blob = await buildCharacterCardCharX(card, avatar, assets);
+            const fname = `${name.replace(/[/\\?%*:|"<>]/g, '_')}.charx`;
+            await window.STUniversalTranslator.saveBlobToDisk(blob, fname, outputFolderInput?.value.trim() || '');
+
+            results[i] = { ok: true, name, refs, imgs: assets.length, total: (out.charxAssets || []).length };
+          } catch (e) {
+            results[i] = { ok: false, name: urls[i].split('/').pop(), error: e.message };
+          }
+          finished++;
+          updateProgress(Math.round((finished / urls.length) * 100),
+            `Lote: ${finished}/${urls.length} — ${results[i]?.name || ''}`);
+          render();
+        }
+      };
+
+      await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker));
+      return results;
+    }
+
     importUrlButton.addEventListener('click', withBusyState(importUrlButton, 'Importando desde URL...', async () => {
-      const url = characterUrlInput.value.trim();
       const jsonText = characterJsonInput?.value.trim() || '';
+      const batchText = (batchUrlsInput?.value || '').trim();
+      const singleUrl = characterUrlInput?.value.trim() || '';
+      const urls = [...new Set(
+        (batchText || singleUrl)
+          .split(/[,\s;]+/)
+          .map((s) => s.trim())
+          .filter((s) => /^https?:\/\//i.test(s)),
+      )];
+
+      if (urls.length === 0) {
+        statusText.textContent = 'Pega al menos una URL de personaje.';
+        updateProgress(0);
+        return;
+      }
+
+      // Flujo de lote cuando hay más de una URL
+      if (urls.length > 1) {
+        const concurrency = Number(batchConcurrencySelect?.value) || 3;
+        if (batchProgressWrap) batchProgressWrap.style.display = 'block';
+        if (batchList) batchList.innerHTML = '';
+        if (batchSummaryText) batchSummaryText.textContent = `0/${urls.length}…`;
+        updateProgress(1, `Importando ${urls.length} personajes (${concurrency} en paralelo)…`);
+        const results = await importBatch(urls, concurrency);
+        const ok = results.filter((r) => r?.ok).length;
+        const fail = results.length - ok;
+        updateProgress(100, `Lote completado: ${ok} correctos${fail ? `, ${fail} fallidos` : ''}.`);
+        return;
+      }
+
+      const url = urls[0];
       if (!url) {
         statusText.textContent = 'Pega primero la URL del personaje.';
         updateProgress(0);

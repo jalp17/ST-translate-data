@@ -301,3 +301,39 @@
 .sttd-translator-panel .sttd-code-preview:focus {
   outline: 1px solid rgba(255, 255, 255, 0.25);
 }
+
+/* Resultado del import por lotes */
+.sttd-translator-panel .sttd-batch-list {
+  margin-top: 0.5rem;
+  max-height: 320px;
+  overflow-y: auto;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.sttd-translator-panel .sttd-batch-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.3rem 0.4rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sttd-translator-panel .sttd-batch-row .sttd-batch-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sttd-translator-panel .sttd-batch-row .sttd-batch-meta {
+  flex: 0 0 auto;
+  opacity: 0.7;
+  font-size: 0.95em;
+}
+
+.sttd-translator-panel .sttd-batch-row.ok .sttd-batch-name { color: var(--ok, #3ecf8e); }
+.sttd-translator-panel .sttd-batch-row.partial .sttd-batch-name { color: var(--warn, #f0a04b); }
+.sttd-translator-panel .sttd-batch-row.fail .sttd-batch-name { color: var(--err, #ef5f5f); }

@@ -165,11 +165,29 @@ export class TipsyProvider extends CharacterProvider {
   }
 
   async fetchRaw(characterId) {
-    const response = await fetch('https://api.tipsy.chat/api/v1/character/get/public', {
+    const url = 'https://api.tipsy.chat/api/v1/character/get/public';
+    const init = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ character_id: characterId, nsfw: true, language_code: 'es' }),
-    });
+    };
+
+    // Tipsy no envía cabeceras CORS, así que el fetch directo desde el navegador
+    // falla siempre. El proxy de SillyTavern reenvía el POST desde el servidor
+    // (src/middleware/corsProxy.js acepta POST/PUT/PATCH), así que va por ahí.
+    const viaProxy = `/proxy/${encodeURIComponent(url)}`;
+
+    // El proxy está exento de CSRF cuando enableCorsProxy está activo, pero
+    // enviar el token no molesta y evita 403 si el usuario lo desactiva.
+    const ctx = globalThis.SillyTavern?.getContext?.();
+    const headers = { 'Content-Type': 'application/json' };
+    const token = ctx?.getRequestHeaders?.()?.['X-CSRF-Token'];
+    if (token) headers['X-CSRF-Token'] = token;
+
+    let response = await fetch(viaProxy, { ...init, headers }).catch(() => null);
+    if (!response || !response.ok) {
+      response = await fetch(url, init);
+    }
     if (!response.ok) {
       throw new Error(`Tipsy respondió ${response.status} para el personaje ${characterId}`);
     }

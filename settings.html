@@ -155,8 +155,27 @@
         <div class="sttd-form-grid">
           <div class="sttd-full-width">
             <label for="characterUrlInput">URL del personaje</label>
-            <input id="characterUrlInput" class="sttd-input" type="text" placeholder="https://moescape.ai/tavern/characters/… o https://tipsy.chat/character/…" />
+            <input id="characterUrlInput" class="sttd-input" type="text" placeholder="https://tipsy.chat/es/chat/… · https://moescape.ai/tavern/characters/…" />
             <div class="sttd-hint">Sitios soportados: moescape.ai, tipsy.chat, juicychat.ai, emochi.com.</div>
+          </div>
+
+          <div class="sttd-full-width">
+            <label for="batchUrlsInput">Varias URLs (opcional, una por línea o separadas por comas)</label>
+            <textarea id="batchUrlsInput" class="sttd-input" rows="4" placeholder="https://tipsy.chat/es/chat/111&#10;https://tipsy.chat/es/chat/222&#10;https://moescape.ai/tavern/characters/…"></textarea>
+            <div class="sttd-hint">Con varias URLs se importan en lote y en paralelo. Si está vacío, se usa el campo de arriba.</div>
+          </div>
+
+          <div class="sttd-full-width">
+            <label for="batchConcurrencySelect">Descargas en paralelo</label>
+            <select id="batchConcurrencySelect" class="sttd-input">
+              <option value="1">1 (una a una)</option>
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+              <option value="6">6</option>
+              <option value="8">8</option>
+            </select>
+            <div class="sttd-hint">Algunos sitios tardan hasta 45 s por imagen. Subirlo acorta el lote; bajarlo reduce el riesgo de que el sitio bloquee.</div>
           </div>
 
           <div class="sttd-full-width">
@@ -195,6 +214,13 @@
           </button>
         </div>
         <div id="importUrlStatusText" class="sttd-hint"></div>
+        <div id="batchProgressWrap" style="display:none; margin-top:0.75rem;">
+          <div class="sttd-section-title" style="font-size:0.9rem; margin-bottom:0.5rem;">
+            <i class="fa-solid fa-list-check"></i> Resultado del lote
+          </div>
+          <div id="batchSummaryText" class="sttd-hint"></div>
+          <div id="batchList" class="sttd-batch-list"></div>
+        </div>
       </div>
 
       <div class="sttd-section-card">

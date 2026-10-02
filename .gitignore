@@ -5,3 +5,5 @@ test_traslate*
 gitignore
 SillyTavern/
 .github/
+# renders generados de los temas (no son fuente)
+temas-st/*.png

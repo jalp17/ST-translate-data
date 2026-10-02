@@ -184,6 +184,18 @@
           </div>
 
           <div class="sttd-full-width">
+            <label for="richFormatSelect">Formato del saludo (cuando el sitio lo tiene con estilos)</label>
+            <select id="richFormatSelect" class="sttd-input">
+              <option value="simple" selected>Simple (markdown sin estilos)</option>
+              <option value="fiel">Fiel (conserva el HTML con estilos)</option>
+            </select>
+            <div class="sttd-hint" id="richFormatHint">
+              Simple: convierte a markdown estándar. Fiel: conserva la carta de fondo, títulos serif,
+              colores, etc. — como está en el sitio. Solo para sitios que lo tengan (Tipsy nuevas).
+            </div>
+          </div>
+
+          <div class="sttd-full-width">
             <label for="importFormatSelect">Formato de salida</label>
             <select id="importFormatSelect" class="sttd-input">
               <option value="png" selected>PNG (tarjeta estándar)</option>

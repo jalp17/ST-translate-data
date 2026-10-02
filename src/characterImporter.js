@@ -1,5 +1,7 @@
 import { parsePNGChunks, buildPNG, buildTextChunkBytes } from './png.js';
 import { juicyEncrypt, juicyDecrypt, JUICYCHAT_SECRET_KEY } from './juicychatCrypto.js';
+import { inlineCssFromHtml } from './richCssInliner.js';
+import { extractLorePages, lorePagesToDetails, lorePagesToBook } from './richLore.js';
 
 /**
  * Importación de tarjetas de personaje desde sitios de roleplay IA por URL.
@@ -44,9 +46,10 @@ export class CharacterProvider {
    * Construye una CharacterCard v2 compatible con SillyTavern.
    * @param {object} raw Payload crudo del sitio
    * @param {string} url URL original
+   * @param {object} options Opciones de importación (p. ej. `richFormatMode`)
    */
-  toCharacterCard(raw, url) {
-    const f = this.toCardFields(raw);
+  toCharacterCard(raw, url, options = {}) {
+    const f = this.toCardFields(raw, options);
     // authorNote: nota del autor que el sitio muestra bajo la card (JuicyChat/Tipsy).
     // Si no hay, se genera una con los metadatos útiles de la extracción.
     const notes = f.authorNote
@@ -202,11 +205,12 @@ export class TipsyProvider extends CharacterProvider {
     return {
       ...payload.data.character,
       _richContent: payload.data.rich_content || null,
+      _imagePrimaryColor: payload.data.character?.img_primary_color || null,
       _images: Array.isArray(payload.data.images) ? payload.data.images : [],
     };
   }
 
-  toCardFields(raw) {
+  toCardFields(raw, options = {}) {
     // Verificado contra la API real: el objeto `character` trae nickname,
     // introduction (pitch corto), greeting (primer mensaje), image_url (principal,
     // con watermark), face_url (recorte cuadrado del mismo render), etc.
@@ -228,7 +232,22 @@ export class TipsyProvider extends CharacterProvider {
     // así que se convierte a markdown y se prefiere cuando está disponible.
     const plainGreeting = raw.greeting || raw.first_message || '';
     const richHtml = raw._richContent?.greeting_rich_text || '';
-    const richMarkdown = richHtml ? richHtmlToMarkdown(richHtml) : '';
+
+    let richMarkdown = '';
+    if (richHtml) {
+      if (options?.richFormatMode === 'fiel') {
+        // Normaliza las etiquetas propietarias y, si la carta trae un bloque
+        // <style> de documento completo, aplana ese CSS a estilos inline: ST
+        // acota el CSS de los mensajes a `.mes_text`, con lo que `:root` y
+        // `body` se vuelven selectores muertos. Ver preserveRichHtmlAsHtml.
+        richMarkdown = preserveRichHtmlAsHtml(richHtml, tipsyBubbleColor(raw));
+        if (typeof document !== 'undefined' && /<style\b/i.test(richMarkdown)) {
+          richMarkdown = inlineCssFromHtml(richMarkdown, document);
+        }
+      } else {
+        richMarkdown = richHtmlToMarkdown(richHtml);
+      }
+    }
     const usedRich = Boolean(richMarkdown) && (!plainGreeting || richMarkdown.length > plainGreeting.length);
     const firstMes = usedRich ? richMarkdown : plainGreeting;
     // El saludo plano estaba realmente aplanado solo si no se pudo usar el rico
@@ -243,16 +262,62 @@ export class TipsyProvider extends CharacterProvider {
       .filter(Boolean);
     const allImages = [...new Set([...greetingImages, ...catalogImages])];
 
+    // La "descripción" de la tarjeta. Se usa el texto plano de
+    // data.character.description: la descripción va al prompt y al panel de
+    // información, donde el HTML no aporta nada.
+    //
+    // NO se usa data.rich_content.tagline aunque en modo fiel tenga mejor
+    // aspecto: el tagline de Tipsy es la *página de la carta*, no su
+    // descripción. Medido sobre 45 personajes de content_type 3: mediana 1022
+    // caracteres pero con un extremo de 78.210 (Guillotinea) y 32.235 (Aurel
+    // Wisp), con bloques <style>, variables :root y hasta 14 <img> externos.
+    // Meter eso en `description` son ~20k tokens de HTML en cada prompt.
+    // El HTML bonito pertenece al saludo, que es donde lo usamos en modo fiel.
+    let description = stripTipsyUiLabels(raw.description || raw.introduction || '');
+    description = stripInlineImagesInTipsy(description).replace(/<img\b[^>]*>/gi, '').trim();
+
+    // Si Tipsy no trajo descripción, el tagline es la única fuente: se usa
+    // como texto plano (sin etiquetas ni estilos) y con un tope, por lo mismo.
+    if (!description) {
+      const tagline = raw._richContent?.tagline || '';
+      if (tagline) {
+        description = richHtmlToMarkdown(tagline)
+          .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+          .replace(/[*_`>#]/g, '')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim()
+          .slice(0, 4000);
+      }
+    }
+
+    // Lore escondido en el <script> del tagline. Tipsy lo monta como visor
+    // interactivo (botones de carrusel y paginacion) y guarda las paginas en
+    // `const lorePages = [...]`. ST borra los <script> al sanear, asi que sin
+    // esto el lore se pierde entero. Se recupera en dos formatos:
+    //  - character_book: donde ST guarda el lore de verdad, por palabras clave.
+    //  - creator_notes: bloques <details>, que el navegador pliega sin JS.
+    const lorePages = extractLorePages(raw._richContent?.tagline || '');
+    const loreBook = lorePages.length
+      ? lorePagesToBook(lorePages, `${raw.nickname || 'Tipsy'} - Lore`)
+      : null;
+    const loreDetails = lorePagesToDetails(lorePages);
+    const creatorNotes = [
+      (raw.creator_notes || raw.creator_note || '').trim(),
+      loreDetails,
+    ].filter(Boolean).join('\n\n');
+
     return {
       name: raw.nickname || raw.name || 'Tipsy character',
-      description: stripInlineImagesInTipsy(raw.description || raw.introduction || ''),
+      description,
       personality: Array.isArray(raw.personality) ? raw.personality.filter(Boolean).join(', ') : (raw.personality || ''),
-      scenario: stripInlineImagesInTipsy(raw.scenario || ''),
+      scenario: stripInlineImagesInTipsy(stripTipsyUiLabels(raw.scenario || '')),
       // El saludo lleva las imágenes de la tarjeta embebidas como markdown
       // ![](https://...) apuntando a hosts públicos (i.postimg.cc, i.ibb.co).
       // SillyTavern renderiza markdown igual que Tipsy, así que se conserva.
       first_mes: firstMes,
       mes_example: stripInlineImagesInTipsy(raw.example_dialogue || raw.dialog_example || ''),
+      authorNote: creatorNotes,
+      characterBook: loreBook,
       // Imágenes del saludo, para poder embeberlas en un .charx y que la
       // tarjeta no dependa de que el hosting siga sirviéndolas.
       embeddedImages: greetingImages,
@@ -484,13 +549,181 @@ export function buildSpriteReference(charName, assetName, ext) {
   return `/characters/${folderEnc}/${base}.${String(ext || 'png').toLowerCase()}`;
 }
 
+/**
+ * Quita las etiquetas de interfaz que algunos autores de Tipsy pegan dentro
+ * del campo de descripcion, porque el texto lo copian de la plantilla del
+ * carrusel de la carta. En Guillotinea, de 480 caracteres de `introduction`,
+ * 360 son esto:
+ *
+ *     Recordatorio: Algunas imagenes pueden tardar unos segundos en cargarse.
+ *     PAGINA 01 / 09
+ *     Imagen anterior / Imagen siguiente / Pagina anterior / Pagina siguiente
+ *
+ * Solo se borran lineas completas que coinciden con esas etiquetas, nunca
+ * texto que las contenga: si el autor escribio "la pagina anterior estaba
+ * vacia" eso se conserva.
+ */
+function stripTipsyUiLabels(text) {
+  if (!text) return text;
+  const LINEAS_BASURA = [
+    /^Recordatorio\s*:/i,
+    /^P[\u00c1A]GINA\s+\d+\s*\/\s*\d+$/i,
+    /^(Imagen|P[\u00e1a]gina)\s+(anterior|siguiente|principal)$/i,
+    /^(Imagen|P[\u00e1a]gina)\s+\d+\s*\/\s*\d+$/i,
+    /^[\u00d7x]$/,
+    /^Ver\s+(todo|original|traducci[\u00f3]n)$/i,
+  ];
+  return String(text)
+    .split('\n')
+    .filter((linea) => !LINEAS_BASURA.some((re) => re.test(linea.trim())))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * Etiquetas proprias de Tipsy para el saludo, y como reproducir su aspecto.
+ *
+ * Tipsy renderiza el saludo procesando el HTML en el cliente:
+ *
+ *   - `<message>`   -> lo envuelve en `.char-message-bubble`, con fondo
+ *                      `toRgba(img_primary_color, 0.8)`, es decir el color
+ *                      dominante de la IMAGEN del personaje. Por eso la burbuja
+ *                      cambia de color segun el personaje: no es un estilo de
+ *                      tema, se calcula de la imagen. Constantes de Tipsy:
+ *                        DEFAULT_CHAT_BUBBLE_COLOR    = #8145A8  (morado)
+ *                        CHAT_BUBBLE_BACKGROUND_ALPHA = 0.8
+ *                        CHAT_BUBBLE_BACKDROP_FILTER  = blur(22.8px)
+ *   - `<narration>` -> `.narration-segment`: texto normal, sin burbuja.
+ *   - `<html-box>`  -> contenedor; es la unica que admite `<script>` dentro.
+ *
+ * Por eso aqui NO se quitan las etiquetas:
+ *
+ *  - narration se desenvuelve a texto plano, que es exactamente como lo
+ *    pinta Tipsy (`text-shadow:0 4px 20px #000; font-size:14px; line-height:20px`).
+ *  - message se convierte en `<span class="sttd-msg">` con el color del personaje
+ *    puesto en linea, porque `style="..."` si sobrevive al sanitizado de ST y las
+ *    clases tambien. La geometria de la burbuja la pone el CSS de la extension.
+ *
+ * Sin esto, un saludo de Tipsy se veia como un bloque de texto plano: se perdia
+ * justo lo que distingue la narración del diálogo.
+ */
+
+/**
+ * Convierte el color de la imagen a `rgba()` con el alfa que usa Tipsy para las
+ * burbujas. Constantes sacadas del bundle del sitio (modulo 750709):
+ *   DEFAULT_CHAT_BUBBLE_COLOR    = '#8145A8'  (morado, si el personaje no trae color)
+ *   CHAT_BUBBLE_BACKGROUND_ALPHA = 0.8
+ */
+const TIPSY_DEFAULT_BUBBLE_COLOR = '#8145A8';
+const TIPSY_BUBBLE_ALPHA = 0.8;
+
+/** Devuelve el color de burbuja que Tipsy pintaria para este personaje. */
+function tipsyBubbleColor(raw) {
+  const hex = String(raw?._imagePrimaryColor || TIPSY_DEFAULT_BUBBLE_COLOR).trim();
+  const h = hex.replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(h)) {
+    // si Tipsy no trae color, se usa el suyo por defecto con su alfa
+    const d = TIPSY_DEFAULT_BUBBLE_COLOR.slice(1);
+    return `rgba(${parseInt(d.slice(0,2),16)}, ${parseInt(d.slice(2,4),16)}, ${parseInt(d.slice(4,6),16)}, ${TIPSY_BUBBLE_ALPHA})`;
+  }
+  return `rgba(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}, ${TIPSY_BUBBLE_ALPHA})`;
+}
+
+/**
+ * Devuelve las reglas de reemplazo para las etiquetas de Tipsy, con el color de
+ * la burbuja ya resuelto (va en linea porque `style="..."` sobrevive al
+ * sanitizado de ST y las clases tambien).
+ */
+function proprietaryTagRules(bubbleColor) {
+  return [
+    [/<\/?html-box(\s[^>]*)?>/gi, (m) => (m.startsWith('</') ? '</div>' : '<div>')],
+    [/<\/?narration(\s[^>]*)?>/gi, ''],
+    [/<message(\s[^>]*)?>/gi, () => `<span class="sttd-msg" style="background:${bubbleColor}">`],
+    [/<\/message\s*>/gi, '</span>'],
+  ];
+}
+
+
+/**
+ * Deja los `<style>` en la forma exacta que ST espera (`<style>` sin atributos)
+ * para que su `encodeStyleTags` los capture y `decodeStyleTags` los acote a
+ * `.mes_text`. Un `<style type="text/css">` se salta ese regex, pasa intacto por
+ * DOMPurify —donde `style` sí está permitido— y aplica a toda la interfaz.
+ */
+function normalizeStyleTags(html) {
+  return String(html).replace(
+    /<style\b([^>]*)>/gi,
+    (match, attrs) => {
+      // Los atributos type/media/scoped solo cambian cómo interpreta el bloque el
+      // navegador; justo por conservarlos es por lo que puede escapar del scope.
+      // `scoped` es booleano (sin `=`), así que se comprueba el nombre suelto,
+      // anclado a un espacio para no confundirlo con p. ej. `data-type`.
+      const risky = /(?:^|\s)(?:type|media|scoped)\b/i.test(attrs || '');
+      return risky ? '<style>' : match;
+    },
+  );
+}
+
+/**
+ * Prepara el rich_content HTML de Tipsy para que ST lo renderice igual que en
+ * la web. Comprobado contra el pipeline real de ST 1.19.0
+ * (showdown -> DOMPurify -> decodeStyleTags, public/script.js:1955):
+ *
+ * 1. Los estilos **inline** sobreviven intactos: DOMPurify los permite y solo
+ *    desenvuelve las etiquetas propietarias. Como el estilo de cada elemento
+ *    va en su propio atributo `style`, perder la etiqueta no cambia nada de
+ *    aspecto. Tipsy además no usa clases ni CSS externo (verificado en los
+ *    bundles del sitio), así que no hay nada más que preservar.
+ * 2. Los bloques `<style>` se dejan casi tal cual: `messageFormatting` los
+ *    codifica (encodeStyleTags), los sanea y los acota a `.mes_text` con
+ *    prefijo `.custom-` en las clases (decodeStyleTags). Reimplementar eso
+ *    aquí solo risks double-scoping.
+ * 3. Se les quita el atributo `type` (ver normalizeStyleTags). El regex de
+ *    ST es /<style>(.+?)<\/style>/: exige la etiqueta desnuda, así que un
+ *    `<style type="text/css">` NO lo captura, llega crudo a DOMPurify (donde
+ *    `style` sí está en la lista blanca) y se inyecta como CSS **global**,
+ *    saltándose el prefijo `.mes_text`. Como el HTML viene de una API de
+ *    terceros, se neutraliza ese camino.
+ *
+ * @param {string} html
+ * @returns {string} HTML listo para first_mes
+ */
+export function preserveRichHtmlAsHtml(html, bubbleColor = tipsyBubbleColor({})) {
+  if (!html || typeof html !== 'string') return html;
+
+  let text = String(html);
+
+  // Zap del <head>: no aportan nada visible en el mensaje
+  text = text.replace(/<head[\s\S]*?<\/head>/gi, '');
+  text = text.replace(/<meta[^>]*>/gi, '');
+  text = text.replace(/<link[^>]*>/gi, '');
+  text = text.replace(/<!--[\s\S]*?-->/g, '');
+  text = text.replace(/<title>[\s\S]*?<\/title>/gi, '');
+
+  text = normalizeStyleTags(text);
+
+  // Etiquetas proprietarias -> HTML estándar (evita el <p> fantasma de showdown)
+  for (const [re, fn] of proprietaryTagRules(bubbleColor)) {
+    text = text.replace(re, fn);
+  }
+
+  return text;
+}
+
 /** Extrae las URLs de imágenes markdown de un texto, sin repetir y en orden. */
 export function extractMarkdownImageUrls(text) {
-  const matches = String(text || '').matchAll(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g);
+  // Dos sintaxis: markdown ![](url) en el saludo plano, y <img src="url"> en
+  // el HTML rico (modo fiel). Con solo la primera, las imagenes de las cartas
+  // con formato se escapaban y sus assets CharX nunca se descargaban.
+  const patrones = [
+    /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g,
+    /<img\b[^>]*?\bsrc\s*=\s*["'](https?:\/\/[^"']+)["']/gi,
+  ];
   const urls = [];
-  for (const m of matches) {
-    if (!urls.includes(m[1])) {
-      urls.push(m[1]);
+  for (const patron of patrones) {
+    for (const m of String(text || '').matchAll(patron)) {
+      if (!urls.includes(m[1])) urls.push(m[1]);
     }
   }
   return urls;
@@ -1034,7 +1267,7 @@ export async function importCharacterFromUrl(url, options = {}) {
     }
   }
 
-  return provider.toCharacterCard(raw, url);
+  return provider.toCharacterCard(raw, url, options);
 }
 
 /**

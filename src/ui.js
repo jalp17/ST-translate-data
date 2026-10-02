@@ -146,6 +146,7 @@ export function attachTranslatorSettingsEvents() {
   const importUrlButton = document.getElementById('importUrlButton');
   const importFormatSelect = document.getElementById('importFormatSelect');
   const importFormatHint = document.getElementById('importFormatHint');
+  const richFormatSelect = document.getElementById('richFormatSelect');
   const spriteReferencesCheckbox = document.getElementById('spriteReferencesCheckbox');
   const chatExportSiteSelect = document.getElementById('chatExportSiteSelect');
   const chatExportSiteNote = document.getElementById('chatExportSiteNote');
@@ -1259,7 +1260,9 @@ export function attachTranslatorSettingsEvents() {
           const i = cursor++;
           if (i >= urls.length) return;
           try {
-            const out = await importCharacterFromUrl(urls[i]);
+            const out = await importCharacterFromUrl(urls[i], {
+              richFormatMode: richFormatSelect?.value || 'simple',
+            });
             const card = out.card;
             const name = card.data.name;
 
@@ -1355,7 +1358,10 @@ export function attachTranslatorSettingsEvents() {
         }
 
         updateProgress(20, 'Obteniendo datos del personaje...');
-        const result = await window.STUniversalTranslator.importCharacterFromUrl(url, { rawJson });
+        const result = await window.STUniversalTranslator.importCharacterFromUrl(url, {
+          rawJson,
+          richFormatMode: richFormatSelect?.value || 'simple',
+        });
         const { card, avatarUrl, backgroundUrls = [] } = result;
 
         if (!avatarUrl) {

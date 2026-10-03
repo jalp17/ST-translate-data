@@ -1,6 +1,7 @@
 import { parsePNGChunks, buildPNG, buildTextChunkBytes } from './pngChunks.js';
 import { juicyEncrypt, juicyDecrypt, JUICYCHAT_SECRET_KEY } from './juicychatCrypto.js';
 import { scopeDocumentCss } from './richCssInliner.js';
+import { buildFontFaceCss, declaredFontFamilies } from './richFonts.js';
 import { extractLorePages, lorePagesToDetails, lorePagesToBook } from './richLore.js';
 
 /**
@@ -48,8 +49,8 @@ export class CharacterProvider {
    * @param {string} url URL original
    * @param {object} options Opciones de importación (p. ej. `richFormatMode`)
    */
-  toCharacterCard(raw, url, options = {}) {
-    const f = this.toCardFields(raw, options);
+  async toCharacterCard(raw, url, options = {}) {
+    const f = await this.toCardFields(raw, options);
     // authorNote: nota del autor que el sitio muestra bajo la card (JuicyChat/Tipsy).
     // Si no hay, se genera una con los metadatos útiles de la extracción.
     const notes = f.authorNote
@@ -210,7 +211,7 @@ export class TipsyProvider extends CharacterProvider {
     };
   }
 
-  toCardFields(raw, options = {}) {
+  async toCardFields(raw, options = {}) {
     // Verificado contra la API real: el objeto `character` trae nickname,
     // introduction (pitch corto), greeting (primer mensaje), image_url (principal,
     // con watermark), face_url (recorte cuadrado del mismo render), etc.
@@ -241,6 +242,21 @@ export class TipsyProvider extends CharacterProvider {
         // acota el CSS de los mensajes a `.mes_text`, con lo que `:root` y
         // `body` se vuelven selectores muertos. Ver preserveRichHtmlAsHtml.
         richMarkdown = preserveRichHtmlAsHtml(richHtml, tipsyBubbleColor(raw));
+
+        // Tipografias: el saludo declara `font-family: 'Sancreek', serif` pero
+        // las carga con un <link> a Google Fonts, que no llega al chat (DOMPurify
+        // lo borra y ST bloquea la media externa). Sin la fuente real el texto
+        // cae al fallback y la carta pierde medio aire. Se incrustan como data
+        // URI, que si sobreviven. Va optativo porque pesa ~137 KB.
+        // Ver richFonts.js.
+        if (options?.embedWebFonts && /fonts\.googleapis\.com/i.test(richHtml)) {
+          const familias = declaredFontFamilies(richHtml);
+          const { css, bytes, ficheros } = await buildFontFaceCss(familias, options);
+          if (css) {
+            richMarkdown = richMarkdown.replace('<style>', `<style>${css}`);
+            console.log(`[ST-Translator] tipografias incrustadas: ${ficheros} ficheros, ${Math.round(bytes / 1024)} KB`);
+          }
+        }
         // Si la carta es un documento HTML completo, se reapunta su CSS al
         // contenedor en vez de aplanarlo a estilos inline: inlinear rompe la
         // cascada y multiplicaba el tamaño (15.596 chars de atributos para
@@ -1271,7 +1287,7 @@ export async function importCharacterFromUrl(url, options = {}) {
     }
   }
 
-  return provider.toCharacterCard(raw, url, options);
+  return await provider.toCharacterCard(raw, url, options);
 }
 
 /**

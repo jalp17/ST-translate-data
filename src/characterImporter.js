@@ -1,6 +1,6 @@
-import { parsePNGChunks, buildPNG, buildTextChunkBytes } from './png.js';
+import { parsePNGChunks, buildPNG, buildTextChunkBytes } from './pngChunks.js';
 import { juicyEncrypt, juicyDecrypt, JUICYCHAT_SECRET_KEY } from './juicychatCrypto.js';
-import { inlineCssFromHtml } from './richCssInliner.js';
+import { scopeDocumentCss } from './richCssInliner.js';
 import { extractLorePages, lorePagesToDetails, lorePagesToBook } from './richLore.js';
 
 /**
@@ -241,8 +241,12 @@ export class TipsyProvider extends CharacterProvider {
         // acota el CSS de los mensajes a `.mes_text`, con lo que `:root` y
         // `body` se vuelven selectores muertos. Ver preserveRichHtmlAsHtml.
         richMarkdown = preserveRichHtmlAsHtml(richHtml, tipsyBubbleColor(raw));
-        if (typeof document !== 'undefined' && /<style\b/i.test(richMarkdown)) {
-          richMarkdown = inlineCssFromHtml(richMarkdown, document);
+        // Si la carta es un documento HTML completo, se reapunta su CSS al
+        // contenedor en vez de aplanarlo a estilos inline: inlinear rompe la
+        // cascada y multiplicaba el tamaño (15.596 chars de atributos para
+        // 1.937 de texto). Ver scopeDocumentCss.
+        if (/<style\b/i.test(richMarkdown)) {
+          richMarkdown = scopeDocumentCss(richMarkdown, 'custom-sttd-doc');
         }
       } else {
         richMarkdown = richHtmlToMarkdown(richHtml);

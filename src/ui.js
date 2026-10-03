@@ -2,8 +2,48 @@ import { DEFAULT_ENDPOINTS, getModelsForProvider } from './translateProviders.js
 import { importCharacterFromUrl, buildCharacterCardPng } from './characterImporter.js';
 import { CHAT_EXPORT_SCRIPTS } from './chatExportScripts.js';
 import { populateForm, bindAutoSave } from './ui/settings.js';
+import { EXTENSION_FOLDER } from './extensionInfo.js';
 
 export { populateForm, bindAutoSave } from './ui/settings.js';
+
+/**
+ * Lee una plantilla de la extension probando las rutas en las que ST la puede
+ * servir.
+ *
+ * `renderExtensionTemplateAsync` construye `scripts/extensions/<nombre>/...`,
+ * que solo cubre las extensiones que viven en `public/`. Las de terceros
+ * estan en `public/scripts/extensions/third-party/` y las instaladas desde el
+ * gestor, en `data/<usuario>/extensions/`, asi que la misma ruta no sirve para
+ * todas. Antes el panel se cargaba de un solo intento y si no coincidia se
+ * quedaba en blanco sin error; ahora se prueban las tres.
+ */
+async function loadExtensionTemplate(context, extensionName, templateId) {
+  const rutas = [
+    () => context.renderExtensionTemplateAsync(extensionName, templateId),
+    async () => {
+      const res = await fetch(`/scripts/extensions/third-party/${extensionName}/${templateId}.html`);
+      return res.ok ? res.text() : null;
+    },
+    async () => {
+      const res = await fetch(`/scripts/extensions/${extensionName}/${templateId}.html`);
+      return res.ok ? res.text() : null;
+    },
+  ];
+
+  for (const [i, leer] of rutas.entries()) {
+    try {
+      const html = await leer();
+      if (html && html.length) {
+        return html;
+      }
+      console.debug(`[ST-Translator] ${templateId}.html vacio por la ruta ${i + 1}`);
+    } catch (error) {
+      console.debug(`[ST-Translator] ${templateId}.html no disponible por la ruta ${i + 1}:`, error);
+    }
+  }
+  console.warn(`[ST-Translator] no se pudo cargar ${templateId}.html de ${extensionName}`);
+  return null;
+}
 
 export async function initializeExtensionPanel() {
   const tryRenderSettings = async () => {
@@ -23,32 +63,13 @@ export async function initializeExtensionPanel() {
     }
 
     try {
-      const currentScript = document.currentScript || document.querySelector('script[type="module"][src*="/dist/script.js"]') || document.querySelector('script[src*="script.js"]');
-      const scriptSrc = currentScript?.src;
-      const extensionNameMatch = scriptSrc ? scriptSrc.match(/\/scripts\/extensions\/(.+?)\/dist\/script\.js$/) : null;
-      const extensionName = extensionNameMatch ? extensionNameMatch[1] : null;
-
-      let settingsHtml = null;
-      if (extensionName) {
-        try {
-          settingsHtml = await context.renderExtensionTemplateAsync(extensionName, 'settings');
-        } catch (error) {
-          console.warn('ST-Universal-Translator: renderExtensionTemplateAsync failed', error);
-        }
-      }
-
-      if (!settingsHtml && scriptSrc) {
-        const baseUrl = scriptSrc.replace(/\/[^/]*$/, '/');
-        const fallbackUrl = new URL('../settings.html', baseUrl).href;
-        try {
-          const settingsResponse = await fetch(fallbackUrl);
-          if (settingsResponse.ok) {
-            settingsHtml = await settingsResponse.text();
-          }
-        } catch {
-          // ignore fallback failure
-        }
-      }
+      // El nombre de la carpeta lo fija ST a partir del manifest, no del
+      // codigo. Antes se adivinaba con un regex atado al nombre del bundle
+      // (`.../dist/script.js`), que se rompia en silencio al renombrar la
+      // salida: extensionName quedaba null y el panel no cargaba. Ahora sale
+      // de una constante. Ver extensionInfo.js.
+      const extensionName = EXTENSION_FOLDER;
+      const settingsHtml = await loadExtensionTemplate(context, extensionName, 'settings');
 
       if (settingsHtml) {
         const wrapper = document.createElement('div');

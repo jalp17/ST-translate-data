@@ -48,7 +48,7 @@
  * bordes, radio, sombra de caja, opacidad, padding y margen, y el ancho maximo
  * para que las imagenes no se desborden.
  */
-const PROPIEDADES_INLINEABLES = [
+const PROPIEDADES = [
   'color', 'background-color', 'background-image', 'background-position',
   'background-size', 'background-repeat', 'background-clip', 'background-origin',
   'font-family', 'font-size', 'font-weight', 'font-style', 'font-variant',
@@ -61,6 +61,19 @@ const PROPIEDADES_INLINEABLES = [
   'padding-bottom', 'padding-left', 'margin', 'margin-top', 'margin-bottom',
   'max-width', 'overflow-wrap', 'word-break',
 ];
+const PROPIEDADES_INLINEABLES = new Set(PROPIEDADES);
+
+/** Atajo -> forma larga que queda determinada por el. */
+const ATALOS = {
+  'margin-top': 'margin', 'margin-right': 'margin', 'margin-bottom': 'margin', 'margin-left': 'margin',
+  'padding-top': 'padding', 'padding-right': 'padding', 'padding-bottom': 'padding', 'padding-left': 'padding',
+  'border-top': 'border', 'border-right': 'border', 'border-bottom': 'border', 'border-left': 'border',
+  'border-color': 'border', 'border-width': 'border', 'border-style': 'border',
+  'background-color': 'background', 'background-image': 'background', 'background-position': 'background',
+  'background-size': 'background', 'background-repeat': 'background', 'background-clip': 'background',
+  'background-origin': 'background',
+  'flex-direction': 'flex', 'flex-wrap': 'flex', 'flex-grow': 'flex', 'flex-shrink': 'flex', 'flex-basis': 'flex',
+};
 
 /** Normaliza `:root` / `html` para que apunten a la raiz del fragmento. */
 function normalizarRaiz(selector) {
@@ -204,11 +217,21 @@ export function inlineCssFromHtml(html, doc) {
     const ganadoras = new Map();
     for (const r of reglas) {
       if (!aplica(r, el)) continue;
-      for (const prop of PROPIEDADES_INLINEABLES) {
+      // Solo las propiedades que la regla DECLARA. No se recorre la lista de
+      // propiedades admitidas con getPropertyValue, porque al consultar una
+      // regla que usa un atajo (`background: X`) el navegador devuelve tambien
+      // las propiedades largas en su valor inicial (`background-size: auto`,
+      // `background-clip: border-box`...), y esoacababa escribiendo ~600
+      // caracteres de relleno por elemento. Iterar el CSSStyleDeclaration de la
+      // regla devuelve solo lo declarado.
+      for (const prop of r.estilo) {
+        if (!PROPIEDADES_INLINEABLES.has(prop)) continue;
         const val = r.estilo.getPropertyValue(prop);
         if (!val) continue;
         const resuelta = resolverVars(val, variables);
         if (!resuelta) continue;
+        // si el atajo equivalente ya esta puesto, la forma larga sobra
+        if (ATALOS[prop] && ganadoras.has(ATALOS[prop])) continue;
         ganadoras.set(prop, resuelta);
       }
     }
@@ -219,4 +242,86 @@ export function inlineCssFromHtml(html, doc) {
 
   limpiar();
   return plantilla.innerHTML;
+}
+/**
+ * Adapta el CSS de una carta que es un documento HTML completo para que ST lo
+ * pueda acotomar sin inlinearlo.
+ *
+ * POR QUE NO INLINEAR
+ *
+ * Aplanar el CSS a `style="..."` por elemento destruye la cascada: una regla
+ * que aplica a 36 elementos hay que escribirla 36 veces. En Three Days on the
+ * Widow Ranch eran 15.596 chars de atributos para 1.937 de texto, y ademas se
+ * colaba relleno: al leer una regla que usa un atajo con `getPropertyValue`, el
+ * navegador devuelve tambien las formas largas en su valor inicial.
+ *
+ * ST ya resuelve el problema del sandbox por su cuenta: `decodeStyleTags`
+ * antepone `.mes_text` a cada selector y renombra las clases de forma coherente
+ * en el CSS y en el HTML. Lo UNICO que no sobrevive son los selectores de nivel
+ * documento, porque se vuelven impossibles:
+ *
+ *   :root -> .mes_text :root    no casa
+ *   body  -> .mes_text body     no casa
+ *
+ * Asi que basta con reescribirlos para que apunten al contenedor de la carta y
+ * devolver el CSS como bloque `<style>`, que es lo que ST sabe acotar. El
+ * resultado es unas 5.000 chars en vez de 15.596, y la cascada se respeta
+ * exactamente como la escribio el autor.
+ *
+ * @param {string} html documento con un bloque <style>
+ * @param {string} clase nombre de la clase que se pone al contenedor
+ * @returns {string} html con la clase puesta y el CSS reapuntado
+ */
+export function scopeDocumentCss(html, clase) {
+  if (!html || typeof html !== 'string') return html;
+  if (!/<style\b/i.test(html)) return html;
+
+  const sel = `.${clase}`;
+  // 1) Prefijar las clases de la carta con `custom-`.
+  //
+  // ST renombra las clases de los mensajes anadiendoles ese prefijo, pero lo
+  // hace solo en un lado: al poner `.sttd-doc` en el CSS lo deja como
+  // `.custom-sttd-doc`, mientras el atributo class del HTML se queda en
+  // `sttd-doc`. Esos nombres no casan y el diseño no se aplica.
+  // Prefijando aqui ambas partes, ST ya no toca nada (ignora lo que ya empieza
+  // por `custom-`) y el CSS del autor funciona tal cual.
+  let doc = String(html);
+  const clases = new Set();
+  for (const m of String(html).matchAll(/class="([^"]*)"/g)) {
+    for (const c of m[1].split(/\s+/)) if (c && !c.startsWith('custom-')) clases.add(c);
+  }
+  const pre = (txt) => Array.from(clases).reduce(
+    (acc, c) => acc.replace(new RegExp(`(?<![\\w-])${c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`, 'g'), `custom-${c}`),
+    txt,
+  );
+  doc = pre(doc);
+
+  // 2) reapuntar los selectores de nivel documento al contenedor
+  const cssArreglado = doc
+    .replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (_, attrs, css) => `<style${limpiarAttrsStyle(attrs)}>${reapuntarCss(pre(css), sel)}</style>`);
+
+  // 3) lo que quede fuera de los bloques <style> se envuelve en el contenedor
+  const partes = cssArreglado.split(/(<style\b[^>]*>[\s\S]*?<\/style>)/gi);
+  let envuelto = '';
+  for (const parte of partes) {
+    if (!parte) continue;
+    if (/^<style\b/i.test(parte)) envuelto += parte;
+    else envuelto += `<div class="${clase}">${parte}</div>`;
+  }
+  return envuelto;
+}
+
+/** Reescribe :root, html y body para que apunten al contenedor de la carta. */
+function reapuntarCss(css, sel) {
+  return String(css)
+    .replace(/(^|\})\s*:root\b/g, `$1 ${sel}`)
+    .replace(/(^|\})\s*html\s*(?=[{>~+])/g, `$1 ${sel}`)
+    .replace(/(^|\})\s*html\s*\{/g, `$1 ${sel} {`)
+    .replace(/(^|\})\s*body\s*\{/g, `$1 ${sel} {`)
+    .replace(/(^|\})\s*body\s+(?=[\w.#\[:])/g, `$1 ${sel} `);
+}
+
+/** Deja el <style> en la forma que ST acota (sin type/media/scoped). */
+function limpiarAttrsStyle(attrs) {
+  return attrs && !/(?:^|\s)(?:type|media|scoped)\b/i.test(attrs) ? attrs : '';
 }

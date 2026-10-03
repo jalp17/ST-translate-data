@@ -5,6 +5,7 @@ import {
   parseOpenAIResponse,
   parseGenericCompletionResponse,
 } from './utils.js';
+import { SETTINGS_KEY } from './extensionInfo.js';
 
 export const DEFAULT_ENDPOINTS = {
   st_backend: '(Usa la conexión activa de SillyTavern)',
@@ -504,7 +505,7 @@ async function translateWithGoogleTranslate(text, sourceLang, targetLang, provid
 // Model fetching per provider
 // ---------------------------------------------------------------------------
 
-const MODEL_CACHE_KEY = 'stTranslateModelCache';
+const MODEL_CACHE_KEY = 'modelCache';
 const MODEL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const PROVIDER_MODEL_ENDPOINTS = {
@@ -642,7 +643,7 @@ export async function getModelsForProvider(provider, { apiKey, apiUrl } = {}) {
 function readModelsCache(provider) {
   try {
     const ctx = globalThis.SillyTavern?.getContext?.();
-    const cache = ctx?.extensionSettings?.stTranslate?.[MODEL_CACHE_KEY] ?? {};
+    const cache = ctx?.extensionSettings?.[SETTINGS_KEY]?.[MODEL_CACHE_KEY] ?? {};
     const entry = cache[provider];
     if (!entry || !Array.isArray(entry.models) || !entry.models.length) {
       return null;
@@ -661,13 +662,13 @@ function writeModelsCache(provider, models) {
   try {
     const ctx = globalThis.SillyTavern?.getContext?.();
     if (!ctx?.extensionSettings) return;
-    if (!ctx.extensionSettings.stTranslate) {
-      ctx.extensionSettings.stTranslate = {};
+    if (!ctx.extensionSettings[SETTINGS_KEY]) {
+      ctx.extensionSettings[SETTINGS_KEY] = {};
     }
-    if (!ctx.extensionSettings.stTranslate[MODEL_CACHE_KEY]) {
-      ctx.extensionSettings.stTranslate[MODEL_CACHE_KEY] = {};
+    if (!ctx.extensionSettings[SETTINGS_KEY][MODEL_CACHE_KEY]) {
+      ctx.extensionSettings[SETTINGS_KEY][MODEL_CACHE_KEY] = {};
     }
-    ctx.extensionSettings.stTranslate[MODEL_CACHE_KEY][provider] = {
+    ctx.extensionSettings[SETTINGS_KEY][MODEL_CACHE_KEY][provider] = {
       ts: Date.now(),
       models,
     };

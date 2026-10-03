@@ -1,6 +1,8 @@
 import { DEFAULT_ENDPOINTS, SUPPORTED_TRANSLATION_PROVIDERS } from '../translateProviders.js';
+import { SETTINGS_KEY, LEGACY_SETTINGS_KEYS } from '../extensionInfo.js';
 
-export const MODULE_NAME = 'translate';
+/** Clave propia dentro de `extension_settings`. Ver extensionInfo.js. */
+export const MODULE_NAME = SETTINGS_KEY;
 
 export const DEFAULT_SETTINGS = {
   sourceLang: 'auto',
@@ -16,16 +18,49 @@ export const DEFAULT_SETTINGS = {
   outputFolder: '',
 };
 
+/**
+ * Recoge los ajustes que se guardaron bajo las claves antiguas y los lleva a la
+ * actual, sin perder nada.
+ *
+ * `translate` era una clave RESERVADA de ST (`extensions.js:193`), en uso por su
+ * propia extensión de traducción, así que ahí conviven sus campos
+ * (`target_language`, `provider`, `deepl_endpoint`...) con los nuestros
+ * (`providerSelect`, `connectionModeSelect`...). De esa clave solo se copian
+ * los campos que existen en DEFAULT_SETTINGS: lo demás es de ST y no se toca.
+ *
+ * `stTranslate` era solo nuestra (la caché de modelos), así que se migra
+ * entera. Esa caché es volátil y se puede perder sin consequencia.
+ */
+function migrateLegacySettings(extensionSettings) {
+  const viejo = extensionSettings.translate;
+  if (viejo && typeof viejo === 'object' && !Array.isArray(viejo)) {
+    const nuestros = {};
+    for (const key of Object.keys(DEFAULT_SETTINGS)) {
+      if (key in viejo) nuestros[key] = viejo[key];
+    }
+    if (Object.keys(nuestros).length) {
+      extensionSettings[SETTINGS_KEY] = { ...extensionSettings[SETTINGS_KEY], ...nuestros };
+    }
+  }
+
+  const cacheVieja = extensionSettings.stTranslate;
+  if (cacheVieja && typeof cacheVieja === 'object' && !Array.isArray(cacheVieja)) {
+    extensionSettings[SETTINGS_KEY] = { ...extensionSettings[SETTINGS_KEY], ...cacheVieja };
+    delete extensionSettings.stTranslate;
+  }
+}
+
 export function getSettings() {
   const context = globalThis.SillyTavern?.getContext?.();
   const extensionSettings = context?.extensionSettings;
   if (!extensionSettings) {
     return { ...DEFAULT_SETTINGS };
   }
-  if (!extensionSettings[MODULE_NAME]) {
-    extensionSettings[MODULE_NAME] = { ...DEFAULT_SETTINGS };
+  if (!extensionSettings[SETTINGS_KEY]) {
+    extensionSettings[SETTINGS_KEY] = { ...DEFAULT_SETTINGS };
   }
-  return { ...DEFAULT_SETTINGS, ...extensionSettings[MODULE_NAME] };
+  migrateLegacySettings(extensionSettings);
+  return { ...DEFAULT_SETTINGS, ...extensionSettings[SETTINGS_KEY] };
 }
 
 export function saveSettings(partial = {}) {
